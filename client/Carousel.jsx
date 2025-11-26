@@ -1,48 +1,49 @@
-// client/Carousel.jsx
 import React from 'react';
-import './Carousel.css';
 
 const Carousel = ({ items, activeIndex, onNavigate }) => {
   
-  // Fonction pour calculer l'index précédent (boucle infinie)
   const getPrevIndex = (current, total) => (current - 1 + total) % total;
-  // Fonction pour calculer l'index suivant
   const getNextIndex = (current, total) => (current + 1) % total;
 
   return (
-    <div className="carousel-container">
+    // Conteneur 3D
+    <div className="flex items-center justify-center gap-4 my-8 h-[220px] perspective-[1000px]">
+      
       {/* Flèche Gauche */}
       <button 
-        className="nav-arrow" 
+        className="w-10 h-10 flex items-center justify-center rounded-full bg-black/50 border border-white/20 text-white hover:bg-white/10 hover:border-indigo-500 transition-all z-50 text-xl pb-1"
         onClick={() => onNavigate(getPrevIndex(activeIndex, items.length))}
       >
         &#8592;
       </button>
 
-      <div className="cards-wrapper">
+      {/* Zone des cartes */}
+      <div className="relative flex justify-center items-center w-[300px] h-full">
         {items.map((item, index) => {
-          // Déterminer la classe (active, prev, next)
-          let className = "menu-card";
-          
+          let baseClasses = "absolute w-[160px] h-[200px] rounded-xl flex flex-col justify-center items-center transition-all duration-500 ease-out cursor-pointer shadow-2xl border-2";
+          let stateClasses = "";
+
           if (index === activeIndex) {
-            className += " active";
+            // ACTIVE (Centre)
+            stateClasses = "z-20 scale-110 bg-[#2a2a2a] border-indigo-500 shadow-[0_0_30px_rgba(99,102,241,0.3)] opacity-100 translate-x-0";
           } else if (index === getPrevIndex(activeIndex, items.length)) {
-            className += " prev";
+            // GAUCHE
+            stateClasses = "z-10 scale-90 bg-[#1e1e1e] border-gray-700 opacity-50 blur-[1px] -translate-x-[120%] [transform:rotateY(25deg)]";
           } else if (index === getNextIndex(activeIndex, items.length)) {
-            className += " next";
+            // DROITE
+            stateClasses = "z-10 scale-90 bg-[#1e1e1e] border-gray-700 opacity-50 blur-[1px] translate-x-[120%] [transform:rotateY(-25deg)]";
           } else {
-            // Si on ajoute plus de 3 cartes plus tard, les autres seront cachées
-            return null; 
+            return null; // Caché
           }
 
           return (
             <div 
               key={item.id} 
-              className={className}
-              onClick={() => onNavigate(index)} // Cliquer sur une carte l'active aussi
+              className={`${baseClasses} ${stateClasses}`}
+              onClick={() => onNavigate(index)}
             >
-              <span className="icon">{item.icon}</span>
-              <h3>{item.label}</h3>
+              <span className="text-5xl mb-3">{item.icon}</span>
+              <h3 className="text-lg font-bold text-gray-100">{item.label}</h3>
             </div>
           );
         })}
@@ -50,7 +51,7 @@ const Carousel = ({ items, activeIndex, onNavigate }) => {
 
       {/* Flèche Droite */}
       <button 
-        className="nav-arrow" 
+        className="w-10 h-10 flex items-center justify-center rounded-full bg-black/50 border border-white/20 text-white hover:bg-white/10 hover:border-indigo-500 transition-all z-50 text-xl pb-1"
         onClick={() => onNavigate(getNextIndex(activeIndex, items.length))}
       >
         &#8594;

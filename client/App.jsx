@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { DiscordSDK } from "@discord/embedded-app-sdk";
 import Carousel from './Carousel';
+import Hub from './Hub';
 import "./style.css";
 
 const discordSdk = new DiscordSDK(process.env.CLIENT_ID);
@@ -9,25 +10,12 @@ function App() {
   const [auth, setAuth] = useState(null);
   const [status, setStatus] = useState("Démarrage...");
   
-  // Données
   const [sessionList, setSessionList] = useState([]);
   const [playerData, setPlayerData] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   
-  // Navigation / États
   const [currentSession, setCurrentSession] = useState(null);
   const [activeIndex, setActiveIndex] = useState(1);
-  
-  // États Interface
-  const [selectedSessionId, setSelectedSessionId] = useState(""); // Pour rejoindre
-  
-  // Admin
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [newSessionName, setNewSessionName] = useState("");
-  const [overwriteWarning, setOverwriteWarning] = useState(null);
-  
-  // NOUVEAU : États pour la suppression
-  const [sessionToDelete, setSessionToDelete] = useState("");
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const menuItems = [
     { id: 'outils', label: 'Outils', icon: '🎲' },
@@ -55,7 +43,6 @@ function App() {
         
         fetchSessions();
         checkAdminStatus(access_token);
-
       } catch (error) {
         console.error(error);
         setStatus("Erreur (Relance l'activité)");
@@ -67,8 +54,7 @@ function App() {
   const checkAdminStatus = async (token) => {
     try {
       const res = await fetch("/api/check-admin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ access_token: token, guild_id: discordSdk.guildId }),
       });
       const data = await res.json();
@@ -76,19 +62,12 @@ function App() {
     } catch (e) { console.error("Admin check error", e); }
   };
 
-  const fetchSessions = async () => {
+  const fetchSessions = async (newList = null) => {
+    if (newList) { setSessionList(newList); return; }
     try {
       const res = await fetch("/api/sessions");
       const list = await res.json();
       setSessionList(list);
-      
-      // Initialiser les sélections par défaut s'il y a des sessions
-      if (list.length > 0) {
-        if (!selectedSessionId) setSelectedSessionId(list[0]);
-        if (!sessionToDelete) setSessionToDelete(list[0]);
-      } else {
-        setSessionToDelete(""); // Plus rien à supprimer
-      }
     } catch (e) { console.error("Erreur sessions", e); }
   };
 
@@ -96,8 +75,7 @@ function App() {
     if (!auth || !currentSession) return;
     try {
       const res = await fetch("/api/player", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: auth.user.id, session_id: currentSession }),
       });
       const data = await res.json();
@@ -105,205 +83,58 @@ function App() {
     } catch (e) { console.error("Erreur player data", e); }
   };
 
-  useEffect(() => {
-    if (currentSession) fetchPlayerData();
-  }, [currentSession, activeIndex]);
+  useEffect(() => { if (currentSession) fetchPlayerData(); }, [currentSession, activeIndex]);
 
-  const handleJoinSession = async () => {
-    if (!selectedSessionId) return;
-    setStatus(`Connexion à ${selectedSessionId}...`);
+  const handleJoinSession = async (sessionId) => {
+    setStatus(`Connexion à ${sessionId}...`);
     try {
       const res = await fetch("/api/join", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: auth.user.id, session_id: selectedSessionId }),
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: auth.user.id, session_id: sessionId }),
       });
       const data = await res.json();
       if (data.success) setCurrentSession(data.session_id);
     } catch (e) { setStatus("Erreur serveur"); }
   };
 
-  // --- FONCTIONS ADMIN ---
-  const handleCreateSession = async (force = false) => {
-    if (!newSessionName.trim()) return;
-    try {
-      const res = await fetch("/api/sessions/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          access_token: auth.access_token, 
-          guild_id: discordSdk.guildId, 
-          session_id: newSessionName.trim(),
-          force 
-        }),
-      });
-      
-      if (res.status === 409) {
-        setOverwriteWarning(newSessionName);
-        return;
-      }
-      const data = await res.json();
-      if (data.success) {
-        setSessionList(data.list);
-        setSessionToDelete(data.list[0]); // Mettre à jour la liste de suppression aussi
-        setNewSessionName("");
-        setOverwriteWarning(null);
-        alert("Session créée !");
-      }
-    } catch (e) { alert("Erreur création"); }
-  };
+  if (!auth) return <div className="flex h-screen items-center justify-center text-xl text-gray-400 animate-pulse"><p>{status}</p></div>;
 
-  // Lancer la confirmation
-  const initiateDelete = () => {
-    if (sessionToDelete) setShowDeleteConfirm(true);
-  };
-
-  // Confirmer la suppression
-  const confirmDeleteSession = async () => {
-    try {
-      const res = await fetch("/api/sessions/delete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          access_token: auth.access_token, 
-          guild_id: discordSdk.guildId, 
-          session_id: sessionToDelete
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setSessionList(data.list);
-        // Reset des sélections
-        const nextSession = data.list.length > 0 ? data.list[0] : "";
-        setSessionToDelete(nextSession);
-        setSelectedSessionId(nextSession);
-        setShowDeleteConfirm(false); // Cacher la confirmation
-      }
-    } catch (e) { alert("Erreur suppression"); }
-  };
-
-  if (!auth) return <div className="app-container"><h1>🚀 JDR Assistance</h1><p>{status}</p></div>;
-
-  // --- ECRAN D'ACCUEIL (HUB) ---
   if (!currentSession) {
     return (
-      <div className="app-container">
-        <h1>Bienvenue, {auth.user.username}</h1>
-        
-        {/* Carte JOUEUR */}
-        <div className="card">
-          <h3>Rejoindre une partie</h3>
-          {sessionList.length === 0 ? (
-            <p style={{color: '#aaa'}}>Aucune session active.</p>
-          ) : (
-            <div style={{ maxWidth: '400px', margin: '0 auto' }}>
-              <select 
-                className="session-select"
-                value={selectedSessionId}
-                onChange={(e) => setSelectedSessionId(e.target.value)}
-              >
-                {sessionList.map(sess => <option key={sess} value={sess}>Session : {sess}</option>)}
-              </select>
-              <button onClick={handleJoinSession} className="btn-validate" disabled={!selectedSessionId}>
-                Rejoindre la partie
-              </button>
-            </div>
-          )}
-          <button onClick={fetchSessions} className="btn-link">Actualiser</button>
-        </div>
-
-        {/* Carte ADMIN */}
-        {isAdmin && (
-          <div className="admin-panel">
-            <h3>👑 Zone MJ (Admin)</h3>
-            
-            {/* Création */}
-            <div className="create-box">
-              <input 
-                type="text" 
-                placeholder="Nom nouvelle session"
-                value={newSessionName}
-                onChange={(e) => setNewSessionName(e.target.value)}
-                className="admin-input"
-              />
-              <button onClick={() => handleCreateSession(false)} className="btn-create">Créer</button>
-            </div>
-
-            {/* Alerte Création Doublon */}
-            {overwriteWarning && (
-              <div className="warning-box">
-                <p>⚠️ La session "<strong>{overwriteWarning}</strong>" existe déjà !</p>
-                <button onClick={() => handleCreateSession(true)} className="btn-danger">Écraser (Reset)</button>
-                <button onClick={() => setOverwriteWarning(null)} className="btn-cancel">Annuler</button>
-              </div>
-            )}
-
-            <hr style={{borderColor: '#e67e22', opacity: 0.3, margin: '20px 0'}} />
-
-            {/* Zone Suppression */}
-            <h4 style={{textAlign: 'left', marginBottom: '10px', color:'#e67e22'}}>Supprimer une session :</h4>
-            
-            {sessionList.length > 0 ? (
-              <>
-                <div className="delete-row">
-                  <select 
-                    className="session-select delete-select"
-                    value={sessionToDelete}
-                    onChange={(e) => {
-                      setSessionToDelete(e.target.value);
-                      setShowDeleteConfirm(false); // Cache la confirmation si on change de cible
-                    }}
-                  >
-                    {sessionList.map(sess => <option key={sess} value={sess}>{sess}</option>)}
-                  </select>
-                  
-                  <button onClick={initiateDelete} className="btn-icon-delete" title="Supprimer">
-                    🗑️
-                  </button>
-                </div>
-
-                {/* Confirmation Suppression */}
-                {showDeleteConfirm && (
-                  <div className="confirm-delete-box">
-                    <p>Es-tu sûr de vouloir supprimer définitivement <strong>"{sessionToDelete}"</strong> ?</p>
-                    <div style={{display: 'flex', gap: '10px', justifyContent: 'center'}}>
-                      <button onClick={confirmDeleteSession} className="btn-danger">Oui, supprimer</button>
-                      <button onClick={() => setShowDeleteConfirm(false)} className="btn-cancel">Non</button>
-                    </div>
-                  </div>
-                )}
-              </>
-            ) : (
-              <p style={{fontStyle:'italic', color:'#666'}}>Rien à supprimer.</p>
-            )}
-
-          </div>
-        )}
-      </div>
+      <Hub 
+        user={auth.user} isAdmin={isAdmin} sessionList={sessionList}
+        onJoin={handleJoinSession} onRefresh={fetchSessions}
+        accessToken={auth.access_token} guildId={discordSdk.guildId}
+      />
     );
   }
 
-  // --- ECRAN DE JEU ---
   const renderGameContent = () => {
     const item = menuItems[activeIndex];
-    if (!playerData) return <div className="loading">Chargement...</div>;
+    if (!playerData) return <div className="text-gray-400 animate-pulse mt-10">Chargement...</div>;
 
     if (item.id === 'fiche') {
       const j = playerData.joueur;
       return (
-        <div className="content-panel fiche-panel">
-          <div className="stats-grid">
-            <div className="stat-box"><strong>Force</strong><span>{j.force}</span></div>
-            <div className="stat-box"><strong>Const</strong><span>{j.constitution}</span></div>
-            <div className="stat-box"><strong>Agilité</strong><span>{j.agilite}</span></div>
-            <div className="stat-box"><strong>Intel</strong><span>{j.intelligence}</span></div>
-            <div className="stat-box"><strong>Perc</strong><span>{j.perception}</span></div>
+        <div className="bg-[#222] border border-gray-700 rounded-xl p-6 shadow-xl animate-fade-in">
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-6">
+            {[{ l: 'Force', v: j.force }, { l: 'Const', v: j.constitution }, { l: 'Agilité', v: j.agilite }, { l: 'Intel', v: j.intelligence }, { l: 'Perc', v: j.perception }].map(s => (
+              <div key={s.l} className="bg-[#151515] border border-gray-700 p-2 rounded-lg text-center shadow-sm">
+                <span className="block text-[10px] text-gray-500 uppercase tracking-widest mb-1">{s.l}</span>
+                <span className="text-xl font-bold text-indigo-400">{s.v}</span>
+              </div>
+            ))}
           </div>
-          <hr style={{borderColor: '#444', margin: '15px 0'}}/>
-          <div className="bars-container">
-            <div className="bar-row"><span className="label">HP</span> <span className="val">{j.hp} / {j.hpMax}</span></div>
-            <div className="bar-row"><span className="label">Mana</span> <span className="val">{j.mana} / {j.manaMax}</span></div>
-            <div className="bar-row"><span className="label">Stam</span> <span className="val">{j.stam} / {j.stamMax}</span></div>
+          <div className="space-y-3 border-t border-gray-700/50 pt-4">
+            {[{ l: 'HP', v: j.hp, m: j.hpMax, c: 'text-red-400', b: 'bg-red-500' }, { l: 'Mana', v: j.mana, m: j.manaMax, c: 'text-blue-400', b: 'bg-blue-500' }, { l: 'Stam', v: j.stam, m: j.stamMax, c: 'text-green-400', b: 'bg-green-500' }].map(r => (
+              <div key={r.l} className="bg-[#151515] rounded-lg p-3 relative overflow-hidden border border-gray-800">
+                <div className={`absolute left-0 top-0 bottom-0 opacity-10 ${r.b}`} style={{width: `${(r.v/r.m)*100}%`, transition: 'width 0.5s'}}></div>
+                <div className="flex justify-between items-center relative z-10">
+                  <span className="text-gray-400 font-medium text-sm">{r.l}</span>
+                  <span className={`font-bold font-mono ${r.c}`}>{r.v} <span className="text-gray-600 text-xs">/ {r.m}</span></span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       );
@@ -311,42 +142,41 @@ function App() {
 
     if (item.id === 'argent') {
       const m = playerData.money;
+      const CoinGrid = ({ coins }) => (
+        <div className="grid grid-cols-2 gap-3 mt-3">
+          {[{ l: 'PO', v: coins.po, c: 'text-yellow-500', b: 'border-yellow-500/30 bg-yellow-500/5' }, { l: 'PA', v: coins.pa, c: 'text-gray-300', b: 'border-gray-400/30 bg-gray-400/5' }, { l: 'PC', v: coins.pc, c: 'text-orange-600', b: 'border-orange-700/30 bg-orange-700/5' }, { l: 'PP', v: coins.pp, c: 'text-slate-200', b: 'border-slate-300/30 bg-slate-300/5' }].map((coin) => (
+            <div key={coin.l} className={`p-3 rounded-lg border ${coin.b} flex justify-between items-center`}>
+              <span className={`font-bold ${coin.c}`}>{coin.v}</span><span className={`text-xs font-bold opacity-50 ${coin.c}`}>{coin.l}</span>
+            </div>
+          ))}
+        </div>
+      );
       return (
-        <div className="content-panel money-panel">
-          <div className="money-section">
-            <h3>👛 Porte-monnaie</h3>
-            <div className="coins-grid">
-              <span className="coin po">{m.wallet.po} PO</span><span className="coin pa">{m.wallet.pa} PA</span>
-              <span className="coin pc">{m.wallet.pc} PC</span><span className="coin pp">{m.wallet.pp} PP</span>
-            </div>
-          </div>
-          <div className="money-section" style={{marginTop:'20px', borderTop:'1px solid #444', paddingTop:'10px'}}>
-            <h3>🏦 Banque</h3>
-            <div className="coins-grid">
-              <span className="coin po">{m.bank.po} PO</span><span className="coin pa">{m.bank.pa} PA</span>
-              <span className="coin pc">{m.bank.pc} PC</span><span className="coin pp">{m.bank.pp} PP</span>
-            </div>
-          </div>
+        <div className="bg-[#222] border border-gray-700 rounded-xl p-6 shadow-xl space-y-8 animate-fade-in">
+          <div><h3 className="text-sm uppercase tracking-widest text-gray-500 font-semibold border-b border-gray-700 pb-2">👛 Porte-monnaie</h3><CoinGrid coins={m.wallet} /></div>
+          <div><h3 className="text-sm uppercase tracking-widest text-gray-500 font-semibold border-b border-gray-700 pb-2">🏦 Banque</h3><CoinGrid coins={m.bank} /></div>
         </div>
       );
     }
 
     return (
-      <div className="content-panel">
-        <h2>{item.icon} {item.label}</h2>
-        <p>Session : <strong>{currentSession}</strong></p>
+      <div className="bg-[#222] border border-gray-700 rounded-xl p-8 shadow-xl min-h-[200px] flex flex-col items-center justify-center animate-fade-in">
+        <span className="text-6xl mb-4 block filter drop-shadow-lg">{item.icon}</span>
+        <h2 className="text-2xl font-bold text-white mb-2">{item.label}</h2>
+        <p className="text-gray-400">Session : <span className="text-indigo-400 font-mono bg-indigo-500/10 px-2 py-1 rounded border border-indigo-500/20">{currentSession}</span></p>
+        <p className="text-sm text-gray-600 mt-6 italic">Utilise le bot Discord pour lancer les dés.</p>
       </div>
     );
   };
 
   return (
-    <div className="app-container">
-      <div className="top-bar">
-        <span>Session: {currentSession}</span>
-        <button className="btn-small" onClick={() => setCurrentSession(null)}>Changer</button>
+    <div className="w-full max-w-2xl mx-auto pb-10 pt-4 px-4">
+      <div className="flex justify-between items-center mb-6 px-4 py-3 bg-[#1a1a1a] rounded-full border border-gray-800 shadow-md">
+        <span className="text-sm text-gray-400">Session: <strong className="text-white ml-1">{currentSession}</strong></span>
+        <button onClick={() => setCurrentSession(null)} className="px-4 py-1 text-xs font-bold uppercase tracking-wider bg-gray-700 hover:bg-gray-600 text-white rounded-full transition-colors">Menu</button>
       </div>
       <Carousel items={menuItems} activeIndex={activeIndex} onNavigate={setActiveIndex} />
-      <div className="main-content">{renderGameContent()}</div>
+      <div className="mt-6">{renderGameContent()}</div>
     </div>
   );
 }
