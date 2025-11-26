@@ -31,3 +31,6 @@ dist-ssr
 
 #base  de donner
 *.json
+
+#cloudflared
+cloudflared.exe
