@@ -1,14 +1,12 @@
 import React, { useState } from 'react';
 
 const Start = ({ userId, sessionId, onValidation }) => {
-  // --- ÉTATS LOCAUX (Désormais isolés ici) ---
   const [creationStats, setCreationStats] = useState({
     force: null, constitution: null, agilite: null, intelligence: null, perception: null
   });
   const [moneyRoll, setMoneyRoll] = useState(null);
   const [rerollsLeft, setRerollsLeft] = useState(2);
 
-  // --- LOGIQUE MÉTIER ---
   const rollDice = (count, faces) => {
     let sum = 0;
     for (let i = 0; i < count; i++) {
@@ -46,6 +44,7 @@ const Start = ({ userId, sessionId, onValidation }) => {
 
   const handleSubmit = async () => {
     try {
+      // Appel à la route INIT qui crée réellement la fiche
       const res = await fetch("/api/player/init", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -58,14 +57,13 @@ const Start = ({ userId, sessionId, onValidation }) => {
       });
       const data = await res.json();
       if (data.success) {
-        onValidation(); // On prévient App.jsx que c'est fini
+        onValidation(); // Signale à App.jsx que c'est fini
       }
     } catch (e) {
       alert("Erreur création fiche");
     }
   };
 
-  // --- PRÉPARATION RENDU ---
   const derived = getDerived();
   const allStatsRolled = Object.values(creationStats).every(v => v !== null);
   const moneyRolled = moneyRoll !== null;
@@ -111,7 +109,7 @@ const Start = ({ userId, sessionId, onValidation }) => {
                           ? 'bg-gray-700 hover:bg-indigo-900 text-indigo-300' 
                           : 'bg-gray-800 text-gray-600 cursor-not-allowed'
                     }`}
-                    title={val === null ? "Lancer" : "Relancer (Coûte 1 reroll)"}
+                    title={val === null ? "Lancer" : "Relancer"}
                   >
                     🎲
                   </button>
@@ -121,12 +119,11 @@ const Start = ({ userId, sessionId, onValidation }) => {
           })}
         </div>
 
-        {/* COLONNE DROITE : MONEY & PREVIEW */}
+        {/* COLONNE DROITE */}
         <div className="flex-1 flex flex-col gap-6">
           
-          {/* MONEY */}
           <div className="bg-[#1a1510] p-4 rounded-lg border border-orange-900/30">
-            <h4 className="text-orange-400 font-bold border-b border-orange-900/30 pb-2 mb-3">Bourse de départ (1d100)</h4>
+            <h4 className="text-orange-400 font-bold border-b border-orange-900/30 pb-2 mb-3">Bourse (1d100)</h4>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-3xl">💰</span>
@@ -150,20 +147,19 @@ const Start = ({ userId, sessionId, onValidation }) => {
             </div>
           </div>
 
-          {/* PREVIEW STATS DÉRIVÉES */}
           <div className="bg-[#10151a] p-4 rounded-lg border border-blue-900/30 flex-1">
-            <h4 className="text-blue-400 font-bold border-b border-blue-900/30 pb-2 mb-3">Aperçu Statistiques</h4>
+            <h4 className="text-blue-400 font-bold border-b border-blue-900/30 pb-2 mb-3">Aperçu</h4>
             <div className="space-y-3">
-              <div className="flex justify-between"><span className="text-gray-400">❤️ PV Max (Const×4)</span> <span className="text-red-400 font-mono font-bold">{derived.hp}</span></div>
-              <div className="flex justify-between"><span className="text-gray-400">💧 Mana Max (Int×20)</span> <span className="text-blue-400 font-mono font-bold">{derived.mana}</span></div>
-              <div className="flex justify-between"><span className="text-gray-400">⚡ Stamina ((For+Agi)×10)</span> <span className="text-green-400 font-mono font-bold">{derived.stam}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">❤️ PV</span> <span className="text-red-400 font-mono font-bold">{derived.hp}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">💧 Mana</span> <span className="text-blue-400 font-mono font-bold">{derived.mana}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">⚡ Stam</span> <span className="text-green-400 font-mono font-bold">{derived.stam}</span></div>
             </div>
           </div>
 
         </div>
       </div>
 
-      {/* BOUTON VALIDATION */}
+      {/* BOUTON FINISH */}
       <button 
         onClick={handleSubmit}
         disabled={!canValidate}
@@ -173,7 +169,7 @@ const Start = ({ userId, sessionId, onValidation }) => {
             : 'bg-gray-800 text-gray-500 cursor-not-allowed opacity-50'
         }`}
       >
-        {canValidate ? "✨ Valider et Commencer l'Aventure" : "Termine tes lancers pour valider"}
+        {canValidate ? "✨ Terminer et créer la fiche" : "Termine tes lancers pour valider"}
       </button>
     </div>
   );
