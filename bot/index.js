@@ -1,4 +1,4 @@
-require('dotenv').config({ path: '../.env' });
+require('dotenv').config({ path: '.env' });
 
 const { Client, GatewayIntentBits, Partials, Collection } = require('discord.js');
 const { loadCommands } = require('./src/framework/registry');
