@@ -1,6 +1,6 @@
 require('dotenv').config({ path: '.env' });
 const { REST, Routes } = require('discord.js');
-const { loadCommands } = require('./src/framework/registry');
+const { loadCommands } = require('./src/framework/registry.js');
 
 async function main() {
   const { CLIENT_ID: appId, TOKEN: token, GUILD_ID: guildId } = process.env;

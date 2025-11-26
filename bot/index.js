@@ -1,9 +1,9 @@
 require('dotenv').config({ path: '.env' });
 
 const { Client, GatewayIntentBits, Partials, Collection } = require('discord.js');
-const { loadCommands } = require('./src/framework/registry');
-const { installGlobalPaths } = require('./src/framework/session');
-const { ok, fail } = require('./src/framework/replies');
+const { loadCommands } = require('./src/framework/registry.js');
+const { installGlobalPaths } = require('./src/framework/session.js');
+const { ok, fail } = require('./src/framework/replies.js');
 
 async function bootstrap() {
   // Installe les chemins de session (global.PATHS.*)
