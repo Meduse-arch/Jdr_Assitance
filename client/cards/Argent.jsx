@@ -147,6 +147,7 @@ const Argent = ({ playerData, onRefresh, auth, sessionId }) => {
             </div>
 
             <div className="flex gap-3 mt-8">
+              {/* BOUTON CONFIRMER */}
               <button 
                 onClick={handleTransfer}
                 disabled={!amount || amount <= 0 || isLoading}
@@ -154,12 +155,13 @@ const Argent = ({ playerData, onRefresh, auth, sessionId }) => {
               >
                 {isLoading ? '...' : 'Confirmer'}
               </button>
-              {/* BOUTON RENOMMÉ ICI */}
+              
+              {/* BOUTON ANNULER */}
               <button 
                 onClick={() => setIsModalOpen(false)}
                 className="flex-1 py-3 bg-red-600/80 hover:bg-red-600 text-white font-bold rounded-lg transition-colors"
               >
-                Fermer
+                Annuler
               </button>
             </div>
 

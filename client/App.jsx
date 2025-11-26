@@ -33,7 +33,6 @@ function App() {
     { id: 'argent', label: 'Argent', icon: '💰' }
   ];
 
-  // --- INITIALISATION ---
   useEffect(() => {
     async function setupDiscord() {
       try {
@@ -62,7 +61,6 @@ function App() {
     setupDiscord();
   }, []);
 
-  // --- API CALLS ---
   const checkAdminStatus = async (token) => {
     try {
       const res = await fetch("/api/check-admin", {
@@ -95,7 +93,6 @@ function App() {
     } catch (e) { console.error("Erreur player data", e); }
   };
 
-  // Recharger les données quand nécessaire
   useEffect(() => {
     if (currentSession) fetchPlayerData();
   }, [currentSession, openedCategory]);
@@ -114,10 +111,9 @@ function App() {
 
   // --- RENDER LOGIC ---
 
-  // 1. Chargement
   if (!auth) return <div className="flex h-screen items-center justify-center text-xl text-gray-400 animate-pulse"><p>{status}</p></div>;
 
-  // 2. Hub de sélection de session
+  // 1. Hub de sélection de session
   if (!currentSession) {
     return (
       <Hub 
@@ -128,7 +124,7 @@ function App() {
     );
   }
 
-  // 3. Fonction pour afficher le contenu d'une carte ouverte (ou la création de perso)
+  // 2. Fonction pour afficher le contenu d'une carte ouverte
   const renderDetailPage = () => {
     // Cas A : Création de personnage (si pas de données)
     if (!playerData) {
@@ -142,7 +138,6 @@ function App() {
     }
 
     // Cas B : Affichage des pages
-    // On cherche l'item correspondant à la catégorie ouverte
     const activeItem = menuItems.find(i => i.id === openedCategory);
 
     if (openedCategory === 'fiche') {
@@ -154,12 +149,21 @@ function App() {
     }
 
     // Par défaut : Action
-    return <Action sessionName={currentSession} icon={activeItem?.icon} />;
+    // On passe bien TOUTES les props nécessaires pour le repos
+    return (
+      <Action 
+        sessionName={currentSession} 
+        icon={activeItem?.icon} 
+        playerData={playerData}
+        auth={auth}
+        sessionId={currentSession}
+        onRefresh={fetchPlayerData} 
+      />
+    );
   };
 
-  // 4. Affichage conditionnel : Page Détail OU Menu Principal
+  // 3. Affichage conditionnel : Page Détail OU Menu Principal
   if (openedCategory || (!playerData && currentSession)) {
-    // Si on est dans une catégorie OU en train de créer le perso
     const currentItem = menuItems.find(i => i.id === openedCategory);
     
     return (
@@ -189,7 +193,7 @@ function App() {
     );
   }
 
-  // 5. Menu Principal (Carrousel)
+  // 4. Menu Principal (Carrousel)
   return (
     <div className="w-full max-w-2xl mx-auto pb-10 pt-4 px-4 flex flex-col min-h-screen">
       <div className="flex justify-between items-center mb-6 px-4 py-3 bg-[#1a1a1a] rounded-full border border-gray-800 shadow-md">

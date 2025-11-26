@@ -3,7 +3,7 @@ import path from "path";
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// On pointe vers le fichier DB du bot
+// Chemin vers la base de données du bot
 const DB_PATH = path.join(__dirname, '../bot/src/db/database.json');
 
 export async function readDB() {
@@ -11,7 +11,6 @@ export async function readDB() {
     const data = await fs.readFile(DB_PATH, 'utf8');
     return JSON.parse(data);
   } catch (e) {
-    // Si fichier vide ou inexistant, on renvoie une structure vide
     return { sessions: {}, userSessions: {} };
   }
 }
