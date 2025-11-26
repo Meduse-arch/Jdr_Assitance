@@ -86,3 +86,43 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+/* Ajouts pour le style des données */
+.btn-session {
+  display: block; width: 100%; margin: 10px 0; padding: 15px; font-size: 1.2em;
+  background: #2a2a2a; border: 1px solid #444; border-radius: 8px; cursor: pointer; color: white;
+}
+.btn-link {
+  margin-top: 20px; font-size: 0.9em; background: none; border: none; 
+  color: #888; text-decoration: underline; cursor: pointer;
+}
+
+/* Grille des Stats */
+.stats-grid {
+  display: flex; gap: 10px; justify-content: space-around; flex-wrap: wrap;
+}
+.stat-box {
+  background: #222; padding: 10px; border-radius: 5px; min-width: 60px; border: 1px solid #333;
+}
+.stat-box strong { display: block; font-size: 0.8em; color: #aaa; margin-bottom: 5px; }
+.stat-box span { font-size: 1.2em; font-weight: bold; color: #646cff; }
+
+/* Barres de vie etc */
+.bar-row {
+  display: flex; justify-content: space-between; padding: 5px 10px;
+  background: #1a1a1a; margin-bottom: 5px; border-radius: 4px;
+}
+.bar-row .label { color: #ccc; }
+.bar-row .val { font-weight: bold; }
+
+/* Argent */
+.coins-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+}
+.coin {
+  padding: 8px; border-radius: 4px; background: #111; font-weight: bold;
+}
+.coin.po { color: #ffd700; border: 1px solid #ffd700; }
+.coin.pa { color: #c0c0c0; border: 1px solid #c0c0c0; }
+.coin.pc { color: #cd7f32; border: 1px solid #cd7f32; }
+.coin.pp { color: #e5e4e2; border: 1px solid #e5e4e2; }

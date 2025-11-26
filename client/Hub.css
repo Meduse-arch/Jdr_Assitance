@@ -1,0 +1,59 @@
+.hub-container {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 20px;
+  background: #1a1a1a;
+  border-radius: 10px;
+  border: 1px solid #333;
+}
+
+.session-list {
+  margin: 20px 0;
+  text-align: left;
+}
+
+.session-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #2a2a2a;
+  padding: 10px 15px;
+  margin-bottom: 10px;
+  border-radius: 5px;
+  border: 1px solid #444;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-join {
+  background-color: #2ecc71;
+  color: #fff;
+}
+
+.btn-close {
+  background-color: #e74c3c;
+  color: white;
+  padding: 5px 10px;
+}
+
+.admin-panel {
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px dashed #555;
+}
+
+.create-box {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.warning-box {
+  background: #e67e2222;
+  border: 1px solid #e67e22;
+  padding: 10px;
+  border-radius: 5px;
+}
