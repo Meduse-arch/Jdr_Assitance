@@ -21,7 +21,7 @@ function App() {
 
   const menuItems = [
     { id: 'outils', label: 'Action', icon: '🎲' },
-    { id: 'fiche', label: 'Statut', icon: '📜' },
+    { id: 'fiche', label: 'Statut', icon: '📜' }, // L'ID est 'fiche'
     { id: 'argent', label: 'Argent', icon: '💰' }
   ];
 
@@ -116,9 +116,9 @@ function App() {
     );
   }
 
-  // 2. NAVIGATION (Détail ou Création)
+  // 2. NAVIGATION
   const renderDetailPage = () => {
-    // Si pas de fiche -> CRÉATION
+    // --- ECRAN DE CRÉATION (START) ---
     if (!playerData) {
       return (
         <Start 
@@ -130,10 +130,10 @@ function App() {
     }
 
     // --- ECRANS DE JEU ---
-    // J'ai renommé la variable ici pour éviter le conflit : 'activeItem' au lieu de 'item'
     const activeItem = menuItems.find(i => i.id === openedCategory);
 
-    if (openedCategory === 'statut') {
+    // CORRECTION ICI : 'fiche' correspond à l'ID défini dans menuItems
+    if (openedCategory === 'fiche') {
       const j = playerData.joueur;
       return (
         <div className="animate-fade-in">
@@ -179,11 +179,10 @@ function App() {
       );
     }
 
-    // Action
+    // Action (Par défaut si ce n'est pas Fiche ou Argent)
     return (
       <div className="flex flex-col items-center justify-center py-10 animate-fade-in">
-        {/* Correction ici : activeItem au lieu de item */}
-        <span className="text-6xl mb-4 block filter drop-shadow-lg">{activeItem.icon}</span>
+        <span className="text-6xl mb-4 block filter drop-shadow-lg">{activeItem?.icon || '🎲'}</span>
         <h2 className="text-2xl font-bold text-white mb-2">Zone d'Actions</h2>
         <p className="text-gray-400">Session : <span className="text-indigo-400 font-mono">{currentSession}</span></p>
         <div className="mt-8 p-4 bg-indigo-500/10 border border-indigo-500/30 rounded-lg text-indigo-200 text-sm">
@@ -194,13 +193,12 @@ function App() {
     );
   };
 
-  // Si on doit afficher une page détail (soit une catégorie ouverte, soit création perso car !playerData)
+  // Si on doit afficher une page détail
   if (openedCategory || (!playerData && currentSession)) {
     const currentItem = menuItems.find(i => i.id === openedCategory);
     
     return (
       <div className="w-full max-w-2xl mx-auto min-h-screen flex flex-col">
-        {/* Le Header n'apparait QUE si on a déjà une fiche (donc pas en mode création) */}
         {playerData && (
           <div className="flex items-center justify-between p-4 border-b border-gray-800 bg-[#1a1a1a]/80 backdrop-blur sticky top-0 z-50">
             <button 
