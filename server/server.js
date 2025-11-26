@@ -84,7 +84,6 @@ app.post("/api/sessions/delete", async (req, res) => {
   res.json({ success: true, list: Object.keys(db.sessions) });
 });
 
-// --- CORRECTION 1 : Retourner null si pas de joueur ---
 app.post("/api/player", async (req, res) => {
   const { user_id, session_id } = req.body;
   const db = await readDB();
@@ -92,18 +91,13 @@ app.post("/api/player", async (req, res) => {
   if (!session) return res.status(404).json({ error: "Session introuvable" });
 
   const player = session.players?.[user_id];
-  
-  // ICI : Si pas de joueur, on renvoie null (et pas un objet vide)
-  // C'est ça qui permet au site d'afficher l'écran Start
   if (!player) return res.json(null);
   
   res.json(player);
 });
 
-// --- Route Init (Création réelle de la fiche) ---
 app.post("/api/player/init", async (req, res) => {
   const { user_id, session_id, stats, money } = req.body; 
-  
   const db = await readDB();
   if (!db.sessions[session_id]) return res.status(404).json({ error: "Session introuvable" });
   if (!db.sessions[session_id].players) db.sessions[session_id].players = {};
@@ -119,17 +113,35 @@ app.post("/api/player/init", async (req, res) => {
   const stamMax = Math.max(0, (force + agilite) * 10);
 
   db.sessions[session_id].players[user_id] = {
-    joueur: {
-      force, constitution, agilite, intelligence, perception,
-      hp: hpMax, hpMax: hpMax,
-      mana: manaMax, manaMax: manaMax,
-      stam: stamMax, stamMax: stamMax
-    },
-    money: { 
-      bank: { pc:0, pa:0, po:0, pp:0 }, 
-      wallet: { pc: (Number(money) || 0), pa:0, po:0, pp:0 } 
-    }
+    joueur: { force, constitution, agilite, intelligence, perception, hp: hpMax, hpMax, mana: manaMax, manaMax, stam: stamMax, stamMax },
+    money: { bank: { pc:0, pa:0, po:0, pp:0 }, wallet: { pc: (Number(money) || 0), pa:0, po:0, pp:0 } }
   };
+
+  await writeDB(db);
+  res.json({ success: true });
+});
+
+// --- NOUVELLE ROUTE : TRANSFERT D'ARGENT (Celle qui manquait) ---
+app.post("/api/player/transfer", async (req, res) => {
+  const { user_id, session_id, from, to, coin, amount } = req.body;
+  
+  if (amount <= 0) return res.status(400).json({ error: "Montant invalide" });
+  if (from === to) return res.status(400).json({ error: "Source identique" });
+
+  const db = await readDB();
+  const player = db.sessions[session_id]?.players?.[user_id];
+  
+  if (!player) return res.status(404).json({ error: "Joueur introuvable" });
+
+  // Vérification des fonds
+  const currentAmount = player.money[from][coin] || 0;
+  if (currentAmount < amount) {
+    return res.status(400).json({ error: "Fonds insuffisants" });
+  }
+
+  // Transaction
+  player.money[from][coin] -= amount;
+  player.money[to][coin] += amount;
 
   await writeDB(db);
   res.json({ success: true });
@@ -138,40 +150,23 @@ app.post("/api/player/init", async (req, res) => {
 app.post("/api/token", async (req, res) => {
   try {
     const response = await fetch(`https://discord.com/api/oauth2/token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: process.env.CLIENT_ID,
-        client_secret: process.env.CLIENT_SECRET,
-        grant_type: "authorization_code",
-        code: req.body.code,
-      }),
+      method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ client_id: process.env.CLIENT_ID, client_secret: process.env.CLIENT_SECRET, grant_type: "authorization_code", code: req.body.code }),
     });
     const data = await response.json();
     res.send({ access_token: data.access_token });
-  } catch (e) {
-    res.status(500).send({ error: "Erreur interne" });
-  }
+  } catch (e) { res.status(500).send({ error: "Erreur interne" }); }
 });
 
-// --- CORRECTION 2 : Ne JAMAIS créer de fiche ici ---
 app.post("/api/join", async (req, res) => {
   const { user_id, session_id } = req.body;
   if (!user_id || !session_id) return res.status(400).json({ error: "Infos manquantes" });
-
   const db = await readDB();
   if (!db.sessions[session_id]) return res.status(404).json({ error: "Session inexistante" });
-  
-  // On lie juste l'utilisateur à la session
   if (!db.userSessions) db.userSessions = {};
   db.userSessions[user_id] = session_id;
-
-  // On ne crée PAS de fiche ici. On s'assure juste que le dossier existe.
   if (!db.sessions[session_id].players) db.sessions[session_id].players = {};
-
   await writeDB(db);
-  
-  console.log(`Joueur ${user_id} -> Session ${session_id} (Rejoint sans fiche)`);
   res.json({ success: true, session_id });
 });
 

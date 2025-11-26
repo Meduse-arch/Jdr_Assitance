@@ -42,9 +42,10 @@ const Carousel = ({ items, activeIndex, onNavigate, onOpen }) => {
               className={`${baseClasses} ${stateClasses}`}
               onClick={() => {
                 if (isActive) {
-                  onOpen(item); // Ouvre la page si c'est la carte du centre
+                  // C'EST ICI QUE LA MAGIE OPÈRE :
+                  onOpen(item); // Si c'est la carte du centre, on ouvre la page
                 } else {
-                  onNavigate(index); // Tourne si c'est une carte de côté
+                  onNavigate(index); // Sinon, on tourne le carrousel
                 }
               }}
             >

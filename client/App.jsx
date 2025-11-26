@@ -3,6 +3,12 @@ import { DiscordSDK } from "@discord/embedded-app-sdk";
 import Carousel from './Carousel';
 import Hub from './Hub';
 import Start from './Start';
+
+// Import des cartes depuis le dossier "cards"
+import Fiche from './cards/Fiche';
+import Argent from './cards/Argent';
+import Action from './cards/Action';
+
 import "./style.css";
 
 const discordSdk = new DiscordSDK(process.env.CLIENT_ID);
@@ -11,20 +17,23 @@ function App() {
   const [auth, setAuth] = useState(null);
   const [status, setStatus] = useState("Démarrage...");
   
+  // Données
   const [sessionList, setSessionList] = useState([]);
   const [playerData, setPlayerData] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   
+  // Navigation
   const [currentSession, setCurrentSession] = useState(null);
   const [activeIndex, setActiveIndex] = useState(1);
   const [openedCategory, setOpenedCategory] = useState(null);
 
   const menuItems = [
     { id: 'outils', label: 'Action', icon: '🎲' },
-    { id: 'fiche', label: 'Statut', icon: '📜' }, // L'ID est 'fiche'
+    { id: 'fiche', label: 'Statut', icon: '📜' },
     { id: 'argent', label: 'Argent', icon: '💰' }
   ];
 
+  // --- INITIALISATION ---
   useEffect(() => {
     async function setupDiscord() {
       try {
@@ -53,6 +62,7 @@ function App() {
     setupDiscord();
   }, []);
 
+  // --- API CALLS ---
   const checkAdminStatus = async (token) => {
     try {
       const res = await fetch("/api/check-admin", {
@@ -85,6 +95,7 @@ function App() {
     } catch (e) { console.error("Erreur player data", e); }
   };
 
+  // Recharger les données quand nécessaire
   useEffect(() => {
     if (currentSession) fetchPlayerData();
   }, [currentSession, openedCategory]);
@@ -101,11 +112,12 @@ function App() {
     } catch (e) { setStatus("Erreur serveur"); }
   };
 
-  // --- AFFICHAGE ---
+  // --- RENDER LOGIC ---
 
+  // 1. Chargement
   if (!auth) return <div className="flex h-screen items-center justify-center text-xl text-gray-400 animate-pulse"><p>{status}</p></div>;
 
-  // 1. HUB
+  // 2. Hub de sélection de session
   if (!currentSession) {
     return (
       <Hub 
@@ -116,9 +128,9 @@ function App() {
     );
   }
 
-  // 2. NAVIGATION
+  // 3. Fonction pour afficher le contenu d'une carte ouverte (ou la création de perso)
   const renderDetailPage = () => {
-    // --- ECRAN DE CRÉATION (START) ---
+    // Cas A : Création de personnage (si pas de données)
     if (!playerData) {
       return (
         <Start 
@@ -129,76 +141,31 @@ function App() {
       );
     }
 
-    // --- ECRANS DE JEU ---
+    // Cas B : Affichage des pages
+    // On cherche l'item correspondant à la catégorie ouverte
     const activeItem = menuItems.find(i => i.id === openedCategory);
 
-    // CORRECTION ICI : 'fiche' correspond à l'ID défini dans menuItems
     if (openedCategory === 'fiche') {
-      const j = playerData.joueur;
-      return (
-        <div className="animate-fade-in">
-          <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-6">
-            {[{ l: 'Force', v: j.force }, { l: 'Const', v: j.constitution }, { l: 'Agilité', v: j.agilite }, { l: 'Intel', v: j.intelligence }, { l: 'Perc', v: j.perception }].map(s => (
-              <div key={s.l} className="bg-[#151515] border border-gray-700 p-2 rounded-lg text-center shadow-sm">
-                <span className="block text-[10px] text-gray-500 uppercase tracking-widest mb-1">{s.l}</span>
-                <span className="text-xl font-bold text-indigo-400">{s.v}</span>
-              </div>
-            ))}
-          </div>
-          <div className="space-y-3 border-t border-gray-700/50 pt-4">
-            {[{ l: 'HP', v: j.hp, m: j.hpMax, c: 'text-red-400', b: 'bg-red-500' }, { l: 'Mana', v: j.mana, m: j.manaMax, c: 'text-blue-400', b: 'bg-blue-500' }, { l: 'Stam', v: j.stam, m: j.stamMax, c: 'text-green-400', b: 'bg-green-500' }].map(r => (
-              <div key={r.l} className="bg-[#151515] rounded-lg p-3 relative overflow-hidden border border-gray-800">
-                <div className={`absolute left-0 top-0 bottom-0 opacity-10 ${r.b}`} style={{width: `${(r.v/r.m)*100}%`, transition: 'width 0.5s'}}></div>
-                <div className="flex justify-between items-center relative z-10">
-                  <span className="text-gray-400 font-medium text-sm">{r.l}</span>
-                  <span className={`font-bold font-mono ${r.c}`}>{r.v} <span className="text-gray-600 text-xs">/ {r.m}</span></span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      );
+      return <Fiche playerData={playerData} />;
     }
 
     if (openedCategory === 'argent') {
-      const m = playerData.money;
-      const CoinGrid = ({ coins }) => (
-        <div className="grid grid-cols-2 gap-3 mt-3">
-          {[{ l: 'PO', v: coins.po, c: 'text-yellow-500', b: 'border-yellow-500/30 bg-yellow-500/5' }, { l: 'PA', v: coins.pa, c: 'text-gray-300', b: 'border-gray-400/30 bg-gray-400/5' }, { l: 'PC', v: coins.pc, c: 'text-orange-600', b: 'border-orange-700/30 bg-orange-700/5' }, { l: 'PP', v: coins.pp, c: 'text-slate-200', b: 'border-slate-300/30 bg-slate-300/5' }].map((coin) => (
-            <div key={coin.l} className={`p-3 rounded-lg border ${coin.b} flex justify-between items-center`}>
-              <span className={`font-bold ${coin.c}`}>{coin.v}</span><span className={`text-xs font-bold opacity-50 ${coin.c}`}>{coin.l}</span>
-            </div>
-          ))}
-        </div>
-      );
-      return (
-        <div className="space-y-8 animate-fade-in">
-          <div><h3 className="text-sm uppercase tracking-widest text-gray-500 font-semibold border-b border-gray-700 pb-2">👛 Porte-monnaie</h3><CoinGrid coins={m.wallet} /></div>
-          <div><h3 className="text-sm uppercase tracking-widest text-gray-500 font-semibold border-b border-gray-700 pb-2">🏦 Banque</h3><CoinGrid coins={m.bank} /></div>
-        </div>
-      );
+      return <Argent playerData={playerData} onRefresh={fetchPlayerData} auth={auth} sessionId={currentSession} />;
     }
 
-    // Action (Par défaut si ce n'est pas Fiche ou Argent)
-    return (
-      <div className="flex flex-col items-center justify-center py-10 animate-fade-in">
-        <span className="text-6xl mb-4 block filter drop-shadow-lg">{activeItem?.icon || '🎲'}</span>
-        <h2 className="text-2xl font-bold text-white mb-2">Zone d'Actions</h2>
-        <p className="text-gray-400">Session : <span className="text-indigo-400 font-mono">{currentSession}</span></p>
-        <div className="mt-8 p-4 bg-indigo-500/10 border border-indigo-500/30 rounded-lg text-indigo-200 text-sm">
-          <p>Utilise les commandes slash du bot :</p>
-          <p className="font-mono mt-1 bg-black/30 p-1 rounded">/roll</p>
-        </div>
-      </div>
-    );
+    // Par défaut : Action
+    return <Action sessionName={currentSession} icon={activeItem?.icon} />;
   };
 
-  // Si on doit afficher une page détail
+  // 4. Affichage conditionnel : Page Détail OU Menu Principal
   if (openedCategory || (!playerData && currentSession)) {
+    // Si on est dans une catégorie OU en train de créer le perso
     const currentItem = menuItems.find(i => i.id === openedCategory);
     
     return (
       <div className="w-full max-w-2xl mx-auto min-h-screen flex flex-col">
+        
+        {/* Header Navigation (Seulement si le perso existe déjà) */}
         {playerData && (
           <div className="flex items-center justify-between p-4 border-b border-gray-800 bg-[#1a1a1a]/80 backdrop-blur sticky top-0 z-50">
             <button 
@@ -214,6 +181,7 @@ function App() {
           </div>
         )}
 
+        {/* Contenu de la page */}
         <div className="flex-1 p-4 overflow-y-auto">
           {renderDetailPage()}
         </div>
@@ -221,7 +189,7 @@ function App() {
     );
   }
 
-  // 3. MENU PRINCIPAL (Carrousel)
+  // 5. Menu Principal (Carrousel)
   return (
     <div className="w-full max-w-2xl mx-auto pb-10 pt-4 px-4 flex flex-col min-h-screen">
       <div className="flex justify-between items-center mb-6 px-4 py-3 bg-[#1a1a1a] rounded-full border border-gray-800 shadow-md">
