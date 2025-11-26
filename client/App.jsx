@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { DiscordSDK } from "@discord/embedded-app-sdk";
 import Carousel from './Carousel';
 import Hub from './Hub';
+import Start from './Start';
 import "./style.css";
 
 const discordSdk = new DiscordSDK(process.env.CLIENT_ID);
@@ -16,10 +17,11 @@ function App() {
   
   const [currentSession, setCurrentSession] = useState(null);
   const [activeIndex, setActiveIndex] = useState(1);
+  const [openedCategory, setOpenedCategory] = useState(null);
 
   const menuItems = [
-    { id: 'outils', label: 'Outils', icon: '🎲' },
-    { id: 'fiche', label: 'Fiche', icon: '📜' },
+    { id: 'outils', label: 'Action', icon: '🎲' },
+    { id: 'fiche', label: 'Statut', icon: '📜' },
     { id: 'argent', label: 'Argent', icon: '💰' }
   ];
 
@@ -83,7 +85,9 @@ function App() {
     } catch (e) { console.error("Erreur player data", e); }
   };
 
-  useEffect(() => { if (currentSession) fetchPlayerData(); }, [currentSession, activeIndex]);
+  useEffect(() => {
+    if (currentSession) fetchPlayerData();
+  }, [currentSession, openedCategory]);
 
   const handleJoinSession = async (sessionId) => {
     setStatus(`Connexion à ${sessionId}...`);
@@ -97,8 +101,11 @@ function App() {
     } catch (e) { setStatus("Erreur serveur"); }
   };
 
+  // --- AFFICHAGE ---
+
   if (!auth) return <div className="flex h-screen items-center justify-center text-xl text-gray-400 animate-pulse"><p>{status}</p></div>;
 
+  // 1. HUB
   if (!currentSession) {
     return (
       <Hub 
@@ -109,14 +116,27 @@ function App() {
     );
   }
 
-  const renderGameContent = () => {
-    const item = menuItems[activeIndex];
-    if (!playerData) return <div className="text-gray-400 animate-pulse mt-10">Chargement...</div>;
+  // 2. NAVIGATION (Détail ou Création)
+  const renderDetailPage = () => {
+    // Si pas de fiche -> CRÉATION
+    if (!playerData) {
+      return (
+        <Start 
+          userId={auth.user.id} 
+          sessionId={currentSession} 
+          onValidation={fetchPlayerData} 
+        />
+      );
+    }
 
-    if (item.id === 'fiche') {
+    // --- ECRANS DE JEU ---
+    // J'ai renommé la variable ici pour éviter le conflit : 'activeItem' au lieu de 'item'
+    const activeItem = menuItems.find(i => i.id === openedCategory);
+
+    if (openedCategory === 'statut') {
       const j = playerData.joueur;
       return (
-        <div className="bg-[#222] border border-gray-700 rounded-xl p-6 shadow-xl animate-fade-in">
+        <div className="animate-fade-in">
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-6">
             {[{ l: 'Force', v: j.force }, { l: 'Const', v: j.constitution }, { l: 'Agilité', v: j.agilite }, { l: 'Intel', v: j.intelligence }, { l: 'Perc', v: j.perception }].map(s => (
               <div key={s.l} className="bg-[#151515] border border-gray-700 p-2 rounded-lg text-center shadow-sm">
@@ -140,7 +160,7 @@ function App() {
       );
     }
 
-    if (item.id === 'argent') {
+    if (openedCategory === 'argent') {
       const m = playerData.money;
       const CoinGrid = ({ coins }) => (
         <div className="grid grid-cols-2 gap-3 mt-3">
@@ -152,31 +172,72 @@ function App() {
         </div>
       );
       return (
-        <div className="bg-[#222] border border-gray-700 rounded-xl p-6 shadow-xl space-y-8 animate-fade-in">
+        <div className="space-y-8 animate-fade-in">
           <div><h3 className="text-sm uppercase tracking-widest text-gray-500 font-semibold border-b border-gray-700 pb-2">👛 Porte-monnaie</h3><CoinGrid coins={m.wallet} /></div>
           <div><h3 className="text-sm uppercase tracking-widest text-gray-500 font-semibold border-b border-gray-700 pb-2">🏦 Banque</h3><CoinGrid coins={m.bank} /></div>
         </div>
       );
     }
 
+    // Action
     return (
-      <div className="bg-[#222] border border-gray-700 rounded-xl p-8 shadow-xl min-h-[200px] flex flex-col items-center justify-center animate-fade-in">
-        <span className="text-6xl mb-4 block filter drop-shadow-lg">{item.icon}</span>
-        <h2 className="text-2xl font-bold text-white mb-2">{item.label}</h2>
-        <p className="text-gray-400">Session : <span className="text-indigo-400 font-mono bg-indigo-500/10 px-2 py-1 rounded border border-indigo-500/20">{currentSession}</span></p>
-        <p className="text-sm text-gray-600 mt-6 italic">Utilise le bot Discord pour lancer les dés.</p>
+      <div className="flex flex-col items-center justify-center py-10 animate-fade-in">
+        {/* Correction ici : activeItem au lieu de item */}
+        <span className="text-6xl mb-4 block filter drop-shadow-lg">{activeItem.icon}</span>
+        <h2 className="text-2xl font-bold text-white mb-2">Zone d'Actions</h2>
+        <p className="text-gray-400">Session : <span className="text-indigo-400 font-mono">{currentSession}</span></p>
+        <div className="mt-8 p-4 bg-indigo-500/10 border border-indigo-500/30 rounded-lg text-indigo-200 text-sm">
+          <p>Utilise les commandes slash du bot :</p>
+          <p className="font-mono mt-1 bg-black/30 p-1 rounded">/roll</p>
+        </div>
       </div>
     );
   };
 
+  // Si on doit afficher une page détail (soit une catégorie ouverte, soit création perso car !playerData)
+  if (openedCategory || (!playerData && currentSession)) {
+    const currentItem = menuItems.find(i => i.id === openedCategory);
+    
+    return (
+      <div className="w-full max-w-2xl mx-auto min-h-screen flex flex-col">
+        {/* Le Header n'apparait QUE si on a déjà une fiche (donc pas en mode création) */}
+        {playerData && (
+          <div className="flex items-center justify-between p-4 border-b border-gray-800 bg-[#1a1a1a]/80 backdrop-blur sticky top-0 z-50">
+            <button 
+              onClick={() => setOpenedCategory(null)} 
+              className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors px-2 py-1 rounded hover:bg-white/5 text-xs font-bold uppercase tracking-widest"
+            >
+              <span>&#8592;</span> Retour
+            </button>
+            <h2 className="text-lg font-bold flex items-center gap-2">
+              <span>{currentItem?.icon}</span> {currentItem?.label}
+            </h2>
+            <div className="w-16"></div>
+          </div>
+        )}
+
+        <div className="flex-1 p-4 overflow-y-auto">
+          {renderDetailPage()}
+        </div>
+      </div>
+    );
+  }
+
+  // 3. MENU PRINCIPAL (Carrousel)
   return (
-    <div className="w-full max-w-2xl mx-auto pb-10 pt-4 px-4">
+    <div className="w-full max-w-2xl mx-auto pb-10 pt-4 px-4 flex flex-col min-h-screen">
       <div className="flex justify-between items-center mb-6 px-4 py-3 bg-[#1a1a1a] rounded-full border border-gray-800 shadow-md">
         <span className="text-sm text-gray-400">Session: <strong className="text-white ml-1">{currentSession}</strong></span>
-        <button onClick={() => setCurrentSession(null)} className="px-4 py-1 text-xs font-bold uppercase tracking-wider bg-gray-700 hover:bg-gray-600 text-white rounded-full transition-colors">Menu</button>
+        <button onClick={() => setCurrentSession(null)} className="px-4 py-1 text-xs font-bold uppercase tracking-wider bg-gray-700 hover:bg-gray-600 text-white rounded-full transition-colors">
+          Menu
+        </button>
       </div>
-      <Carousel items={menuItems} activeIndex={activeIndex} onNavigate={setActiveIndex} />
-      <div className="mt-6">{renderGameContent()}</div>
+      
+      <div className="flex-1 flex flex-col justify-center">
+        <h2 className="text-2xl font-bold text-gray-500 mb-2">Menu Principal</h2>
+        <p className="text-gray-600 text-sm mb-8">Choisis une catégorie</p>
+        <Carousel items={menuItems} activeIndex={activeIndex} onNavigate={setActiveIndex} onOpen={(item) => setOpenedCategory(item.id)} />
+      </div>
     </div>
   );
 }
