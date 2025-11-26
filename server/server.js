@@ -6,11 +6,11 @@ import path from "path";
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// On remonte d'un dossier pour trouver le .env
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
 const app = express();
 const port = 3001;
+// Chemin corrigé vers la DB
 const DB_PATH = path.join(__dirname, '../bot/src/db/database.json');
 
 app.use(express.json());
@@ -29,31 +29,92 @@ async function writeDB(data) {
   await fs.writeFile(DB_PATH, JSON.stringify(data, null, 2), 'utf8');
 }
 
-// --- Routes ---
+// --- Helper : Vérif Admin Discord ---
+async function checkAdmin(accessToken, guildId) {
+  if (!guildId) return false;
+  try {
+    const response = await fetch(`https://discord.com/api/users/@me/guilds/${guildId}/member`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const member = await response.json();
+    // Permission ADMINISTRATOR = bit 8
+    const perms = BigInt(member.permissions || 0);
+    const ADMIN_BIT = 8n;
+    return (perms & ADMIN_BIT) === ADMIN_BIT;
+  } catch (e) {
+    console.error("Erreur check admin:", e);
+    return false;
+  }
+}
+
+// --- ROUTES ---
 
 app.get("/api/sessions", async (req, res) => {
   const db = await readDB();
   res.json(Object.keys(db.sessions || {}));
 });
 
-// NOUVEAU : Récupérer les données d'un joueur
+// Vérification Admin
+app.post("/api/check-admin", async (req, res) => {
+  const { access_token, guild_id } = req.body;
+  const isAdmin = await checkAdmin(access_token, guild_id);
+  res.json({ isAdmin });
+});
+
+// Créer Session (Admin)
+app.post("/api/sessions/create", async (req, res) => {
+  const { access_token, guild_id, session_id, force } = req.body;
+
+  if (!await checkAdmin(access_token, guild_id)) {
+    return res.status(403).json({ error: "Non autorisé" });
+  }
+  if (!session_id) return res.status(400).json({ error: "Nom vide" });
+
+  const db = await readDB();
+  
+  if (db.sessions[session_id] && !force) {
+    return res.status(409).json({ error: "Existe déjà", exists: true });
+  }
+
+  db.sessions[session_id] = { players: {} };
+  await writeDB(db);
+  
+  res.json({ success: true, list: Object.keys(db.sessions) });
+});
+
+// Supprimer Session (Admin)
+app.post("/api/sessions/delete", async (req, res) => {
+  const { access_token, guild_id, session_id } = req.body;
+
+  if (!await checkAdmin(access_token, guild_id)) {
+    return res.status(403).json({ error: "Non autorisé" });
+  }
+
+  const db = await readDB();
+  if (db.sessions[session_id]) {
+    delete db.sessions[session_id];
+    // Nettoyage joueurs orphelins
+    for (const uid in db.userSessions) {
+      if (db.userSessions[uid] === session_id) delete db.userSessions[uid];
+    }
+    await writeDB(db);
+  }
+  res.json({ success: true, list: Object.keys(db.sessions) });
+});
+
 app.post("/api/player", async (req, res) => {
   const { user_id, session_id } = req.body;
   const db = await readDB();
-
   const session = db.sessions[session_id];
   if (!session) return res.status(404).json({ error: "Session introuvable" });
 
   const player = session.players?.[user_id];
   if (!player) {
-    // Si le joueur n'existe pas encore, on renvoie une structure vide par défaut
-    // pour éviter que le site plante
     return res.json({
       joueur: { force: 0, constitution: 0, agilite: 0, intelligence: 0, perception: 0, hp: 0, hpMax: 0, mana: 0, manaMax: 0, stam: 0, stamMax: 0 },
       money: { bank: { pc:0, pa:0, po:0, pp:0 }, wallet: { pc:0, pa:0, po:0, pp:0 } }
     });
   }
-
   res.json(player);
 });
 
@@ -78,7 +139,7 @@ app.post("/api/token", async (req, res) => {
 
 app.post("/api/join", async (req, res) => {
   const { user_id, session_id } = req.body;
-  if (!user_id || !session_id) return res.status(400).json({ error: "Manque des infos" });
+  if (!user_id || !session_id) return res.status(400).json({ error: "Infos manquantes" });
 
   const db = await readDB();
   if (!db.sessions[session_id]) return res.status(404).json({ error: "Session inexistante" });
@@ -87,19 +148,15 @@ app.post("/api/join", async (req, res) => {
   db.userSessions[user_id] = session_id;
 
   if (!db.sessions[session_id].players) db.sessions[session_id].players = {};
-  // On initialise le joueur s'il n'existe pas
   if (!db.sessions[session_id].players[user_id]) {
+    // Init nouveau joueur
     db.sessions[session_id].players[user_id] = {
       joueur: { force: 10, constitution: 10, agilite: 10, intelligence: 10, perception: 10, hp: 20, hpMax: 20, mana: 50, manaMax: 50, stam: 50, stamMax: 50 },
       money: { bank: { pc: 0, pa: 0, po: 0, pp: 0 }, wallet: { pc: 0, pa: 0, po: 0, pp: 0 } },
     };
-    await writeDB(db);
-  } else {
-    // On met à jour le lien userSession même si le joueur existe
-    await writeDB(db);
   }
+  await writeDB(db);
   
-  console.log(`Joueur ${user_id} -> Session ${session_id}`);
   res.json({ success: true, session_id });
 });
 
