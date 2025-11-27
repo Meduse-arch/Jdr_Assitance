@@ -5,7 +5,6 @@ import path from "path";
 import { fileURLToPath } from 'url';
 
 import { readDB, writeDB } from './db.js';
-// Ajout de processExchange
 import { checkAdmin, calculateStats, processTransfer, processRepos, processRoll, processResourceMod, processMoneyMod, processStatMod, processExchange } from './actions.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -16,7 +15,33 @@ const port = 3001;
 
 app.use(express.json());
 
+// --- SYSTÈME DE LOGS (ADMIN CONSOLE) ---
+const globalLogs = [];
+const MAX_LOGS = 50;
+
+// On surcharge console.log pour capturer les messages
+const originalLog = console.log;
+console.log = (...args) => {
+  originalLog(...args); // On continue d'afficher dans le vrai terminal
+  
+  // On formate le message pour le stocker
+  const msg = args.map(arg => 
+    typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+  ).join(' ');
+
+  // On ajoute au début du tableau (plus récent en haut)
+  globalLogs.unshift({ id: Date.now() + Math.random(), time: new Date().toLocaleTimeString(), text: msg });
+  
+  // On garde seulement les X derniers logs
+  if (globalLogs.length > MAX_LOGS) globalLogs.pop();
+};
+
 // --- ROUTES ---
+
+// Route pour récupérer les logs (Admin seulement en théorie)
+app.get("/api/admin/logs", (req, res) => {
+  res.json(globalLogs);
+});
 
 app.get("/api/sessions", async (req, res) => { 
   const db = await readDB(); 
@@ -37,6 +62,7 @@ app.post("/api/sessions/create", async (req, res) => {
   if (db.sessions[session_id] && !force) return res.status(409).json({ error: "Existe déjà" }); 
   db.sessions[session_id] = { players: {} }; 
   await writeDB(db); 
+  console.log(`[ADMIN] Session créée : ${session_id}`);
   res.json({ success: true, list: Object.keys(db.sessions) }); 
 });
 
@@ -50,18 +76,21 @@ app.post("/api/sessions/delete", async (req, res) => {
       if (db.userSessions[uid] === session_id) delete db.userSessions[uid]; 
     } 
     await writeDB(db); 
+    console.log(`[ADMIN] Session supprimée : ${session_id}`);
   } 
   res.json({ success: true, list: Object.keys(db.sessions) }); 
 });
 
 app.post("/api/join", async (req, res) => { 
-  const { user_id, session_id } = req.body; 
+  const { user_id, session_id, username } = req.body; 
   const db = await readDB(); 
   if (!db.sessions[session_id]) return res.status(404).json({ error: "Session inexistante" }); 
   if (!db.userSessions) db.userSessions = {}; 
   db.userSessions[user_id] = session_id; 
   if (!db.sessions[session_id].players) db.sessions[session_id].players = {}; 
   await writeDB(db); 
+  
+  console.log(`[SESSION] ${username || user_id} a rejoint la session "${session_id}"`);
   res.json({ success: true, session_id }); 
 });
 
@@ -85,78 +114,91 @@ app.post("/api/player/init", async (req, res) => {
     money: { bank: { pc:0, pa:0, po:0, pp:0 }, wallet: { pc: (Number(money) || 0), pa:0, po:0, pp:0 } } 
   }; 
   await writeDB(db); 
+  console.log(`[INIT] Personnage créé pour ${user_id} dans ${session_id}`);
   res.json({ success: true }); 
 });
 
 app.post("/api/player/repos", async (req, res) => { 
-  const { user_id, session_id, type, target } = req.body; 
+  const { user_id, session_id, type, target, username } = req.body; 
   const db = await readDB(); 
   const player = db.sessions[session_id]?.players?.[user_id]; 
   if (!player) return res.status(404).json({ error: "Joueur introuvable" }); 
   const result = processRepos(player, type, target); 
   if (!result.success) return res.status(400).json({ error: result.error }); 
   await writeDB(db); 
+  
+  console.log(`[REPOS] ${username || user_id} a effectué un repos ${type} ${target ? `(${target})` : ''}`);
   res.json({ success: true }); 
 });
 
 app.post("/api/player/roll", async (req, res) => {
-  const { user_id, session_id, type, data } = req.body;
+  const { user_id, session_id, type, data, username } = req.body;
   const db = await readDB();
   const player = db.sessions[session_id]?.players?.[user_id];
   if (!player) return res.status(404).json({ error: "Joueur introuvable" });
   const result = processRoll(player, type, data);
   if (!result.success) return res.status(400).json({ error: result.error });
   if (result.cost > 0) await writeDB(db);
+  
+  // NOTE: Les logs détaillés sont gérés dans actions.js via console.log, qui est maintenant intercepté !
+  console.log(`[ROLL: RESULT] ${username || user_id} -> ${result.result}`);
   res.json(result);
 });
 
 app.post("/api/player/resource", async (req, res) => {
-  const { user_id, session_id, target, action, value } = req.body;
+  const { user_id, session_id, target, action, value, username } = req.body;
   const db = await readDB();
   const player = db.sessions[session_id]?.players?.[user_id];
   if (!player) return res.status(404).json({ error: "Joueur introuvable" });
   const result = processResourceMod(player, target, action, value);
   if (!result.success) return res.status(400).json({ error: result.error });
   await writeDB(db);
+  
+  console.log(`[RESOURCE] ${username || user_id} : ${action} ${value} ${target}`);
   res.json({ success: true });
 });
 
 app.post("/api/player/money", async (req, res) => {
-  const { user_id, session_id, target, action, coin, value } = req.body;
+  const { user_id, session_id, target, action, coin, value, username } = req.body;
   const db = await readDB();
   const player = db.sessions[session_id]?.players?.[user_id];
   if (!player) return res.status(404).json({ error: "Joueur introuvable" });
   const result = processMoneyMod(player, target, action, coin, value);
   if (!result.success) return res.status(400).json({ error: result.error });
   await writeDB(db);
+  
+  console.log(`[ARGENT] ${username || user_id} : ${action} ${value} ${coin} (${target})`);
   res.json({ success: true });
 });
 
 app.post("/api/player/stat", async (req, res) => {
-  const { user_id, session_id, stat, action, value } = req.body;
+  const { user_id, session_id, stat, action, value, username } = req.body;
   const db = await readDB();
   const player = db.sessions[session_id]?.players?.[user_id];
   if (!player) return res.status(404).json({ error: "Joueur introuvable" });
   const result = processStatMod(player, stat, action, value);
   if (!result.success) return res.status(400).json({ error: result.error });
   await writeDB(db);
+  
+  console.log(`[STAT] ${username || user_id} : ${action} ${value} ${stat}`);
   res.json({ success: true });
 });
 
 app.post("/api/player/transfer", async (req, res) => { 
-  const { user_id, session_id, from, to, coin, amount } = req.body; 
+  const { user_id, session_id, from, to, coin, amount, username } = req.body; 
   const db = await readDB(); 
   const player = db.sessions[session_id]?.players?.[user_id]; 
   if (!player) return res.status(404).json({ error: "Joueur introuvable" }); 
   const result = processTransfer(player, from, to, coin, amount); 
   if (!result.success) return res.status(400).json({ error: result.error }); 
   await writeDB(db); 
+  
+  console.log(`[TRANSFERT] ${username || user_id} : ${amount} ${coin} de ${from} vers ${to}`);
   res.json({ success: true }); 
 });
 
-// NOUVELLE ROUTE : ÉCHANGE
 app.post("/api/player/exchange", async (req, res) => {
-  const { user_id, session_id, container, from, to, amount } = req.body;
+  const { user_id, session_id, container, from, to, amount, username } = req.body;
   const db = await readDB();
   const player = db.sessions[session_id]?.players?.[user_id];
   if (!player) return res.status(404).json({ error: "Joueur introuvable" });
@@ -165,6 +207,7 @@ app.post("/api/player/exchange", async (req, res) => {
   if (!result.success) return res.status(400).json({ error: result.error });
   
   await writeDB(db);
+  console.log(`[ECHANGE] ${username || user_id} : ${amount} ${from} -> ${to} (${container})`);
   res.json({ success: true });
 });
 

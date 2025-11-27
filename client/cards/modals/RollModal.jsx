@@ -36,7 +36,13 @@ const RollModal = ({ isOpen, onClose, auth, sessionId, onRefresh, playerData }) 
     try {
       const res = await fetch("/api/player/roll", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: auth.user.id, session_id: sessionId, type, data: finalPayload }),
+        body: JSON.stringify({ 
+          user_id: auth.user.id, 
+          username: auth.user.username,
+          session_id: sessionId, 
+          type, 
+          data: finalPayload 
+        }),
       });
       const data = await res.json();
       if (data.success) {

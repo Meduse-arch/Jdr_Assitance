@@ -30,7 +30,14 @@ const PersonnageModal = ({ isOpen, onClose, auth, sessionId, onRefresh }) => {
     try {
       const res = await fetch("/api/player/resource", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: auth.user.id, session_id: sessionId, target: resTarget, action: resAction, value: val }),
+        body: JSON.stringify({ 
+          user_id: auth.user.id, 
+          username: auth.user.username,
+          session_id: sessionId, 
+          target: resTarget, 
+          action: resAction, 
+          value: val 
+        }),
       });
       const data = await res.json();
       if (data.success) { await onRefresh(); setResValue(""); } 
@@ -45,7 +52,14 @@ const PersonnageModal = ({ isOpen, onClose, auth, sessionId, onRefresh }) => {
     try {
       const res = await fetch("/api/player/stat", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: auth.user.id, session_id: sessionId, stat: attrTarget, action: attrAction, value: val }),
+        body: JSON.stringify({ 
+          user_id: auth.user.id, 
+          username: auth.user.username,
+          session_id: sessionId, 
+          stat: attrTarget, 
+          action: attrAction, 
+          value: val 
+        }),
       });
       const data = await res.json();
       if (data.success) { await onRefresh(); setAttrValue("1"); } 
@@ -58,7 +72,13 @@ const PersonnageModal = ({ isOpen, onClose, auth, sessionId, onRefresh }) => {
     try {
       const res = await fetch("/api/player/repos", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: auth.user.id, session_id: sessionId, type, target }),
+        body: JSON.stringify({ 
+          user_id: auth.user.id, 
+          username: auth.user.username,
+          session_id: sessionId, 
+          type, 
+          target 
+        }),
       });
       const data = await res.json();
       if (data.success) { await onRefresh(); onClose(); } // On ferme après un repos car c'est une action ponctuelle

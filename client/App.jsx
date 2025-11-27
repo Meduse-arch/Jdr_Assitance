@@ -110,7 +110,11 @@ function App() {
     try {
       const res = await fetch("/api/join", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: auth.user.id, session_id: sessionId }),
+        body: JSON.stringify({ 
+          user_id: auth.user.id, 
+          username: auth.user.username, // Ajout du pseudo pour les logs
+          session_id: sessionId 
+        }),
       });
       const data = await res.json();
       if (data.success) {
@@ -124,11 +128,8 @@ function App() {
   // --- NOUVELLE FONCTION DE NAVIGATION ---
   const handleMenuSelect = (section) => {
     if (section === 'game') {
-      // Si on clique sur JEU, on ouvre directement la page Action ('outils')
-      // sans passer par le carrousel
       setOpenedCategory('outils');
     } else {
-      // Sinon (INFOS), on affiche le carrousel normalement
       setMenuSection(section);
     }
   };
@@ -198,7 +199,6 @@ function App() {
 
   // 4. Choix "Jeu" vs "Infos" (GameHome)
   if (!menuSection) {
-    // On passe notre nouvelle fonction handleMenuSelect ici
     return <GameHome onSelect={handleMenuSelect} sessionName={currentSession} onQuit={() => setCurrentSession(null)} />;
   }
 

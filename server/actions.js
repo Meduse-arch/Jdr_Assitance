@@ -7,15 +7,19 @@ function d(max) {
   return Math.floor(Math.random() * m) + 1;
 }
 
+// Fonction améliorée pour retourner plus d'infos
 function rollWithAdvantage(max, type) {
   const m = Math.max(1, Number(max) || 1);
   const v1 = d(m);
   
-  if (type === 'n' || !type) return { chosen: v1, list: [v1] };
+  if (type === 'n' || !type) return { chosen: v1, list: [v1], ignored: null };
   
   const v2 = d(m);
+  // 'a' = Avantage (Max), 'm' = Malus (Min)
   const chosen = type === 'a' ? Math.max(v1, v2) : Math.min(v1, v2);
-  return { chosen, list: [v1, v2] };
+  const ignored = v1 === chosen ? v2 : v1; // Note: si v1==v2, l'un est choisi, l'autre ignoré, peu importe lequel
+  
+  return { chosen, list: [v1, v2], ignored };
 }
 
 // --- FONCTIONS UTILITAIRES SERVEUR ---
@@ -84,7 +88,6 @@ export function processMoneyMod(player, target, action, coin, value) {
   return { success: true };
 }
 
-// NOUVELLE FONCTION : ÉCHANGE / CONVERSION
 export function processExchange(player, container, fromCoin, toCoin, amount) {
   const val = Number(amount);
   if (!val || val <= 0) return { success: false, error: "Valeur invalide" };
@@ -97,25 +100,14 @@ export function processExchange(player, container, fromCoin, toCoin, amount) {
   const valueFrom = COIN_VALUES[fromCoin];
   const valueTo = COIN_VALUES[toCoin];
 
-  // 1. Calcul de la valeur totale en "base PC" de ce qu'on veut convertir
   const totalValue = val * valueFrom;
-
-  // 2. Combien de pièces "Cibles" on peut obtenir ?
   const numTargetCoins = Math.floor(totalValue / valueTo);
-
-  // 3. Calcul du reste (ce qui n'a pas pu être converti)
   const remainderValue = totalValue % valueTo;
-  
-  // 4. On convertit le reste en pièces d'origine (logique : on rend la monnaie)
   const remainderInSourceCoin = remainderValue / valueFrom; 
 
-  // Mise à jour : On retire TOUT ce que le joueur a mis
   player.money[container][fromCoin] -= val;
-  
-  // On ajoute les nouvelles pièces
   player.money[container][toCoin] += numTargetCoins;
 
-  // On rend la monnaie (le reste)
   if (remainderInSourceCoin > 0) {
     player.money[container][fromCoin] += remainderInSourceCoin;
   }
@@ -215,6 +207,9 @@ export function processRoll(player, type, data) {
   const advType = data.adv || 'n'; 
   const mod = Number(data.mod) || 0;
 
+  // Helper pour afficher le type d'avantage
+  const advLabel = advType === 'a' ? 'AVANTAGE' : advType === 'm' ? 'DÉSAVANTAGE' : 'NORMAL';
+
   if (type === 'stat') {
     const statName = data.stat; 
     const statValue = j[statName];
@@ -235,6 +230,14 @@ export function processRoll(player, type, data) {
       costType = 'Stamina';
       j.stam = Math.max(0, j.stam - cost);
     }
+
+    // LOG DÉTAILLÉ STAT
+    console.log(`[ROLL: STAT] ${statName.toUpperCase()} | Mode: ${advLabel}`);
+    console.log(`  > Dés lancés: [${rollData.list.join(', ')}]`);
+    console.log(`  > Choix: ${rollData.chosen}`);
+    console.log(`  > Modif: ${mod}`);
+    console.log(`  > Résultat Final: ${result}`);
+    if (cost > 0) console.log(`  > Coût: -${cost} ${costType}`);
 
     return { success: true, result, raw: rollData.chosen, list: rollData.list, cost, costType, stat: statName, mod };
   }
@@ -263,25 +266,90 @@ export function processRoll(player, type, data) {
     const cost = mainRoll.chosen;
     j.mana = Math.max(0, j.mana - cost);
 
+    // LOG DÉTAILLÉ SORT
+    console.log(`[ROLL: SORT] Mode: ${advLabel}`);
+    console.log(`  > Intel Dispo: ${intelDispo} (Base: ${j.intelligence}, Coût Effets: ${totalEffectCost})`);
+    console.log(`  > Jet Principal: [${mainRoll.list.join(', ')}] -> ${mainRoll.chosen} + Mod(${mod}) = ${mainResult}`);
+    console.log(`  > Coût Mana: -${cost}`);
+    if (effects.length > 0) {
+      console.log(`  > Effets (${effects.length}):`);
+      effects.forEach((effVal, idx) => {
+        // Note: effectResults est un simple tableau de valeurs, on ne garde pas l'historique adv pour chaque effet individuellement ici pour simplifier le retour
+        console.log(`    - Effet ${idx + 1} (Base ${effVal}): Résultat ${effectResults[idx]} (avec mod ${modEffect})`);
+      });
+    }
+
     return { success: true, result: mainResult, effectResults: effectResults, cost, costType: 'Mana', stat: 'Sort', mod };
   }
 
+  // MODIFICATION POUR DÉS CLASSIQUES
   if (type === 'dice') {
     const min = Number(data.min) || 1;
     const max = Number(data.max) || 100;
     const count = Math.max(1, Number(data.count) || 1);
 
-    let total = 0;
-    const details = [];
+    // Fonction locale pour tirer un set de dés
+    const rollSet = () => {
+      let sum = 0;
+      let rolls = [];
+      for (let i = 0; i < count; i++) {
+        const val = Math.floor(Math.random() * (max - min + 1)) + min;
+        sum += val;
+        rolls.push(val);
+      }
+      return { sum, rolls };
+    };
 
-    for (let i = 0; i < count; i++) {
-      const val = Math.floor(Math.random() * (max - min + 1)) + min;
-      total += val;
-      details.push(val);
+    let resultObj;
+    let chosenSet;
+    let ignoredSet = null;
+
+    // Si pas d'avantage/désavantage
+    if (advType === 'n') {
+      chosenSet = rollSet();
+      resultObj = {
+        result: chosenSet.sum + mod,
+        details: chosenSet.rolls,
+        mod
+      };
+    } else {
+      // Si Avantage/Désavantage, on tire DEUX sets complets
+      const set1 = rollSet();
+      const set2 = rollSet();
+      
+      let isSet1Chosen;
+      if (advType === 'a') {
+        isSet1Chosen = set1.sum >= set2.sum; // Avantage : on garde le plus grand total
+      } else {
+        isSet1Chosen = set1.sum <= set2.sum; // Désavantage : on garde le plus petit total
+      }
+
+      chosenSet = isSet1Chosen ? set1 : set2;
+      ignoredSet = isSet1Chosen ? set2 : set1;
+
+      resultObj = {
+        result: chosenSet.sum + mod,
+        details: chosenSet.rolls, // On renvoie les dés du set choisi
+        mod,
+        // On peut renvoyer plus d'infos si le front veut afficher les deux lancers
+        ignoredDetails: ignoredSet.rolls, 
+        ignoredSum: ignoredSet.sum
+      };
     }
-    total += mod;
 
-    return { success: true, result: total, details, mod };
+    // LOG DÉTAILLÉ DÉ SIMPLE
+    console.log(`[ROLL: DICE] ${count}d(${min}-${max}) | Mode: ${advLabel}`);
+    if (ignoredSet) {
+      console.log(`  > Lancer 1 (Somme: ${chosenSet.sum === rollSet().sum ? '?' : '?'}) : [${chosenSet.rolls.join(', ')}]`); // Simplification log
+      console.log(`  > Set Choisi: [${chosenSet.rolls.join(', ')}] (Somme: ${chosenSet.sum})`);
+      console.log(`  > Set Ignoré: [${ignoredSet.rolls.join(', ')}] (Somme: ${ignoredSet.sum})`);
+    } else {
+      console.log(`  > Résultats: [${chosenSet.rolls.join(', ')}] (Somme: ${chosenSet.sum})`);
+    }
+    console.log(`  > Modif: ${mod}`);
+    console.log(`  > Total Final: ${resultObj.result}`);
+
+    return { success: true, ...resultObj };
   }
 
   return { success: false, error: "Type de roll invalide" };
