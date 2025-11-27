@@ -4,6 +4,7 @@ import Carousel from './Carousel';
 import Hub from './Hub';
 import Start from './Start';
 import GameHome from './GameHome';
+import Admin from './Admin'; // <--- 1. Import de l'Admin
 
 // Import des cartes
 import Fiche from './cards/Fiche';
@@ -23,6 +24,7 @@ function App() {
   const [sessionList, setSessionList] = useState([]);
   const [playerData, setPlayerData] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [adminMode, setAdminMode] = useState(false); // <--- 2. Nouvel état pour le mode Admin
   
   // Navigation
   const [currentSession, setCurrentSession] = useState(null);
@@ -138,18 +140,34 @@ function App() {
 
   if (!auth) return <div className="flex h-screen items-center justify-center text-xl text-gray-400 animate-pulse"><p>{status}</p></div>;
 
-  // 1. Choix de session (Hub)
-  if (!currentSession) {
+  // 1. GESTION MODE ADMIN (Prioritaire)
+  if (adminMode) {
     return (
-      <Hub 
-        user={auth.user} isAdmin={isAdmin} sessionList={sessionList}
-        onJoin={handleJoinSession} onRefresh={fetchSessions}
-        accessToken={auth.access_token} guildId={discordSdk.guildId}
+      <Admin 
+        accessToken={auth.access_token}
+        guildId={discordSdk.guildId}
+        sessionList={sessionList}
+        onRefresh={fetchSessions}
+        onQuit={() => setAdminMode(false)}
       />
     );
   }
 
-  // 2. Création de personnage (si inexistant)
+  // 2. Choix de session (Hub)
+  if (!currentSession) {
+    return (
+      <Hub 
+        user={auth.user} 
+        isAdmin={isAdmin} 
+        sessionList={sessionList}
+        onJoin={handleJoinSession} 
+        onRefresh={fetchSessions}
+        onAdminMode={() => setAdminMode(true)} // <--- Activation via le bouton du Hub
+      />
+    );
+  }
+
+  // 3. Création de personnage (si inexistant)
   if (!playerData) {
     return (
       <div className="w-full max-w-4xl mx-auto p-4 min-h-screen flex flex-col">
@@ -165,7 +183,7 @@ function App() {
     );
   }
 
-  // 3. Affichage d'une Carte Détail (Action, Fiche...)
+  // 4. Affichage d'une Carte Détail (Action, Fiche...)
   if (openedCategory) {
     let content;
     switch (openedCategory) {
@@ -197,12 +215,12 @@ function App() {
     );
   }
 
-  // 4. Choix "Jeu" vs "Infos" (GameHome)
+  // 5. Choix "Jeu" vs "Infos" (GameHome)
   if (!menuSection) {
     return <GameHome onSelect={handleMenuSelect} sessionName={currentSession} onQuit={() => setCurrentSession(null)} />;
   }
 
-  // 5. Carrousel (Menu Info uniquement désormais, car Game saute cette étape)
+  // 6. Carrousel (Menu Info uniquement désormais, car Game saute cette étape)
   const currentItems = menuSection === 'game' ? itemsGame : itemsInfo;
   const sectionTitle = menuSection === 'game' ? 'Zone de Jeu' : 'Zone d\'Infos';
 
