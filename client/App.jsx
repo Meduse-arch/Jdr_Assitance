@@ -4,9 +4,9 @@ import Carousel from './Carousel';
 import Hub from './Hub';
 import Start from './Start';
 
-// Import des cartes depuis le dossier "cards"
+// Import des cartes
 import Fiche from './cards/Fiche';
-import Argent from './cards/Argent';
+import Inventaire from './cards/Inventaire'; // <-- Changement ici
 import Action from './cards/Action';
 
 import "./style.css";
@@ -27,10 +27,11 @@ function App() {
   const [activeIndex, setActiveIndex] = useState(1);
   const [openedCategory, setOpenedCategory] = useState(null);
 
+  // CHANGEMENT ICI : 'argent' devient 'inventaire' avec une nouvelle icône
   const menuItems = [
     { id: 'outils', label: 'Action', icon: '🎲' },
     { id: 'fiche', label: 'Statut', icon: '📜' },
-    { id: 'argent', label: 'Argent', icon: '💰' }
+    { id: 'inventaire', label: 'Inventaire', icon: '🎒' } 
   ];
 
   useEffect(() => {
@@ -109,11 +110,8 @@ function App() {
     } catch (e) { setStatus("Erreur serveur"); }
   };
 
-  // --- RENDER LOGIC ---
-
   if (!auth) return <div className="flex h-screen items-center justify-center text-xl text-gray-400 animate-pulse"><p>{status}</p></div>;
 
-  // 1. Hub de sélection de session
   if (!currentSession) {
     return (
       <Hub 
@@ -124,9 +122,7 @@ function App() {
     );
   }
 
-  // 2. Fonction pour afficher le contenu d'une carte ouverte
   const renderDetailPage = () => {
-    // Cas A : Création de personnage (si pas de données)
     if (!playerData) {
       return (
         <Start 
@@ -137,19 +133,17 @@ function App() {
       );
     }
 
-    // Cas B : Affichage des pages
     const activeItem = menuItems.find(i => i.id === openedCategory);
 
     if (openedCategory === 'fiche') {
       return <Fiche playerData={playerData} />;
     }
 
-    if (openedCategory === 'argent') {
-      return <Argent playerData={playerData} onRefresh={fetchPlayerData} auth={auth} sessionId={currentSession} />;
+    // CHANGEMENT ICI : On affiche Inventaire au lieu d'Argent
+    if (openedCategory === 'inventaire') {
+      return <Inventaire playerData={playerData} onRefresh={fetchPlayerData} auth={auth} sessionId={currentSession} />;
     }
 
-    // Par défaut : Action
-    // On passe bien TOUTES les props nécessaires pour le repos
     return (
       <Action 
         sessionName={currentSession} 
@@ -162,14 +156,11 @@ function App() {
     );
   };
 
-  // 3. Affichage conditionnel : Page Détail OU Menu Principal
   if (openedCategory || (!playerData && currentSession)) {
     const currentItem = menuItems.find(i => i.id === openedCategory);
     
     return (
       <div className="w-full max-w-2xl mx-auto min-h-screen flex flex-col">
-        
-        {/* Header Navigation (Seulement si le perso existe déjà) */}
         {playerData && (
           <div className="flex items-center justify-between p-4 border-b border-gray-800 bg-[#1a1a1a]/80 backdrop-blur sticky top-0 z-50">
             <button 
@@ -184,8 +175,6 @@ function App() {
             <div className="w-16"></div>
           </div>
         )}
-
-        {/* Contenu de la page */}
         <div className="flex-1 p-4 overflow-y-auto">
           {renderDetailPage()}
         </div>
@@ -193,7 +182,6 @@ function App() {
     );
   }
 
-  // 4. Menu Principal (Carrousel)
   return (
     <div className="w-full max-w-2xl mx-auto pb-10 pt-4 px-4 flex flex-col min-h-screen">
       <div className="flex justify-between items-center mb-6 px-4 py-3 bg-[#1a1a1a] rounded-full border border-gray-800 shadow-md">

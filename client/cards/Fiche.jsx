@@ -4,7 +4,8 @@ const Fiche = ({ playerData }) => {
   const j = playerData.joueur;
   
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fade-in relative pb-10">
+      
       {/* Grille des Attributs */}
       <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-6">
         {[
@@ -27,9 +28,7 @@ const Fiche = ({ playerData }) => {
           { l: 'Stam', v: j.stam, m: j.stamMax, c: 'text-green-400', b: 'bg-green-500' }
         ].map(r => (
           <div key={r.l} className="bg-[#151515] rounded-lg p-3 relative overflow-hidden border border-gray-800">
-            {/* Barre de progression */}
             <div className={`absolute left-0 top-0 bottom-0 opacity-10 ${r.b}`} style={{width: `${(r.v/r.m)*100}%`, transition: 'width 0.5s'}}></div>
-            
             <div className="flex justify-between items-center relative z-10">
               <span className="text-gray-400 font-medium text-sm">{r.l}</span>
               <span className={`font-bold font-mono ${r.c}`}>{r.v} <span className="text-gray-600 text-xs">/ {r.m}</span></span>
