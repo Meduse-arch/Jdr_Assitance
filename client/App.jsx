@@ -3,10 +3,12 @@ import { DiscordSDK } from "@discord/embedded-app-sdk";
 import Carousel from './Carousel';
 import Hub from './Hub';
 import Start from './Start';
+import GameHome from './GameHome';
 
 // Import des cartes
 import Fiche from './cards/Fiche';
-import Inventaire from './cards/Inventaire'; // <-- Changement ici
+import Inventaire from './cards/Inventaire';
+import Money from './cards/Money';
 import Action from './cards/Action';
 
 import "./style.css";
@@ -24,14 +26,19 @@ function App() {
   
   // Navigation
   const [currentSession, setCurrentSession] = useState(null);
-  const [activeIndex, setActiveIndex] = useState(1);
+  const [menuSection, setMenuSection] = useState(null); // 'game' | 'info' | null
+  const [activeIndex, setActiveIndex] = useState(0); 
   const [openedCategory, setOpenedCategory] = useState(null);
 
-  // CHANGEMENT ICI : 'argent' devient 'inventaire' avec une nouvelle icône
-  const menuItems = [
-    { id: 'outils', label: 'Action', icon: '🎲' },
+  // Définition des items pour chaque section
+  const itemsGame = [
+    { id: 'outils', label: 'Action', icon: '🎲' }
+  ];
+
+  const itemsInfo = [
     { id: 'fiche', label: 'Statut', icon: '📜' },
-    { id: 'inventaire', label: 'Inventaire', icon: '🎒' } 
+    { id: 'money', label: 'Argent', icon: '💰' },
+    { id: 'inventaire', label: 'Inventaire', icon: '🎒' }
   ];
 
   useEffect(() => {
@@ -106,12 +113,31 @@ function App() {
         body: JSON.stringify({ user_id: auth.user.id, session_id: sessionId }),
       });
       const data = await res.json();
-      if (data.success) setCurrentSession(data.session_id);
+      if (data.success) {
+        setCurrentSession(data.session_id);
+        setMenuSection(null);
+        setOpenedCategory(null);
+      }
     } catch (e) { setStatus("Erreur serveur"); }
   };
 
+  // --- NOUVELLE FONCTION DE NAVIGATION ---
+  const handleMenuSelect = (section) => {
+    if (section === 'game') {
+      // Si on clique sur JEU, on ouvre directement la page Action ('outils')
+      // sans passer par le carrousel
+      setOpenedCategory('outils');
+    } else {
+      // Sinon (INFOS), on affiche le carrousel normalement
+      setMenuSection(section);
+    }
+  };
+
+  // --- RENDU ---
+
   if (!auth) return <div className="flex h-screen items-center justify-center text-xl text-gray-400 animate-pulse"><p>{status}</p></div>;
 
+  // 1. Choix de session (Hub)
   if (!currentSession) {
     return (
       <Hub 
@@ -122,79 +148,82 @@ function App() {
     );
   }
 
-  const renderDetailPage = () => {
-    if (!playerData) {
-      return (
+  // 2. Création de personnage (si inexistant)
+  if (!playerData) {
+    return (
+      <div className="w-full max-w-4xl mx-auto p-4 min-h-screen flex flex-col">
+        <div className="flex justify-between items-center mb-6">
+           <button onClick={() => setCurrentSession(null)} className="text-sm text-gray-500 hover:text-white underline">Retour Hub</button>
+        </div>
         <Start 
           userId={auth.user.id} 
           sessionId={currentSession} 
           onValidation={fetchPlayerData} 
         />
-      );
-    }
-
-    const activeItem = menuItems.find(i => i.id === openedCategory);
-
-    if (openedCategory === 'fiche') {
-      return <Fiche playerData={playerData} />;
-    }
-
-    // CHANGEMENT ICI : On affiche Inventaire au lieu d'Argent
-    if (openedCategory === 'inventaire') {
-      return <Inventaire playerData={playerData} onRefresh={fetchPlayerData} auth={auth} sessionId={currentSession} />;
-    }
-
-    return (
-      <Action 
-        sessionName={currentSession} 
-        icon={activeItem?.icon} 
-        playerData={playerData}
-        auth={auth}
-        sessionId={currentSession}
-        onRefresh={fetchPlayerData} 
-      />
+      </div>
     );
-  };
+  }
 
-  if (openedCategory || (!playerData && currentSession)) {
-    const currentItem = menuItems.find(i => i.id === openedCategory);
-    
+  // 3. Affichage d'une Carte Détail (Action, Fiche...)
+  if (openedCategory) {
+    let content;
+    switch (openedCategory) {
+      case 'fiche': content = <Fiche playerData={playerData} />; break;
+      case 'money': content = <Money playerData={playerData} onRefresh={fetchPlayerData} auth={auth} sessionId={currentSession} />; break;
+      case 'inventaire': content = <Inventaire />; break;
+      default: // 'outils' (Action)
+        content = <Action sessionName={currentSession} icon="🎲" playerData={playerData} auth={auth} sessionId={currentSession} onRefresh={fetchPlayerData} />;
+    }
+
+    const currentItemLabel = [...itemsGame, ...itemsInfo].find(i => i.id === openedCategory)?.label;
+
     return (
       <div className="w-full max-w-2xl mx-auto min-h-screen flex flex-col">
-        {playerData && (
-          <div className="flex items-center justify-between p-4 border-b border-gray-800 bg-[#1a1a1a]/80 backdrop-blur sticky top-0 z-50">
-            <button 
-              onClick={() => setOpenedCategory(null)} 
-              className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors px-2 py-1 rounded hover:bg-white/5 text-xs font-bold uppercase tracking-widest"
-            >
-              <span>&#8592;</span> Retour
-            </button>
-            <h2 className="text-lg font-bold flex items-center gap-2">
-              <span>{currentItem?.icon}</span> {currentItem?.label}
-            </h2>
-            <div className="w-16"></div>
-          </div>
-        )}
+        <div className="flex items-center justify-between p-4 border-b border-gray-800 bg-[#1a1a1a]/80 backdrop-blur sticky top-0 z-50">
+          <button 
+            onClick={() => setOpenedCategory(null)} 
+            className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors px-2 py-1 rounded hover:bg-white/5 text-xs font-bold uppercase tracking-widest"
+          >
+            <span>&#8592;</span> Retour
+          </button>
+          <h2 className="text-lg font-bold text-white">{currentItemLabel}</h2>
+          <div className="w-16"></div>
+        </div>
         <div className="flex-1 p-4 overflow-y-auto">
-          {renderDetailPage()}
+          {content}
         </div>
       </div>
     );
   }
 
+  // 4. Choix "Jeu" vs "Infos" (GameHome)
+  if (!menuSection) {
+    // On passe notre nouvelle fonction handleMenuSelect ici
+    return <GameHome onSelect={handleMenuSelect} sessionName={currentSession} onQuit={() => setCurrentSession(null)} />;
+  }
+
+  // 5. Carrousel (Menu Info uniquement désormais, car Game saute cette étape)
+  const currentItems = menuSection === 'game' ? itemsGame : itemsInfo;
+  const sectionTitle = menuSection === 'game' ? 'Zone de Jeu' : 'Zone d\'Infos';
+
   return (
     <div className="w-full max-w-2xl mx-auto pb-10 pt-4 px-4 flex flex-col min-h-screen">
+      
       <div className="flex justify-between items-center mb-6 px-4 py-3 bg-[#1a1a1a] rounded-full border border-gray-800 shadow-md">
-        <span className="text-sm text-gray-400">Session: <strong className="text-white ml-1">{currentSession}</strong></span>
-        <button onClick={() => setCurrentSession(null)} className="px-4 py-1 text-xs font-bold uppercase tracking-wider bg-gray-700 hover:bg-gray-600 text-white rounded-full transition-colors">
-          Menu
+        <button onClick={() => setMenuSection(null)} className="px-4 py-1 text-xs font-bold uppercase tracking-wider bg-gray-700 hover:bg-gray-600 text-white rounded-full transition-colors flex items-center gap-2">
+          <span>&#8592;</span> Retour
         </button>
+        <span className="text-sm font-bold text-gray-300">{sectionTitle}</span>
+        <div className="w-16"></div>
       </div>
       
       <div className="flex-1 flex flex-col justify-center">
-        <h2 className="text-2xl font-bold text-gray-500 mb-2">Menu Principal</h2>
-        <p className="text-gray-600 text-sm mb-8">Choisis une catégorie</p>
-        <Carousel items={menuItems} activeIndex={activeIndex} onNavigate={setActiveIndex} onOpen={(item) => setOpenedCategory(item.id)} />
+        <Carousel 
+          items={currentItems} 
+          activeIndex={activeIndex % currentItems.length} 
+          onNavigate={setActiveIndex} 
+          onOpen={(item) => setOpenedCategory(item.id)} 
+        />
       </div>
     </div>
   );
