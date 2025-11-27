@@ -5,8 +5,8 @@ import path from "path";
 import { fileURLToPath } from 'url';
 
 import { readDB, writeDB } from './db.js';
-// Ajout de processStatMod dans les imports
-import { checkAdmin, calculateStats, processTransfer, processRepos, processRoll, processResourceMod, processMoneyMod, processStatMod } from './actions.js';
+// Ajout de processExchange
+import { checkAdmin, calculateStats, processTransfer, processRepos, processRoll, processResourceMod, processMoneyMod, processStatMod, processExchange } from './actions.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '../.env') });
@@ -132,7 +132,6 @@ app.post("/api/player/money", async (req, res) => {
   res.json({ success: true });
 });
 
-// NOUVELLE ROUTE STATS
 app.post("/api/player/stat", async (req, res) => {
   const { user_id, session_id, stat, action, value } = req.body;
   const db = await readDB();
@@ -153,6 +152,20 @@ app.post("/api/player/transfer", async (req, res) => {
   if (!result.success) return res.status(400).json({ error: result.error }); 
   await writeDB(db); 
   res.json({ success: true }); 
+});
+
+// NOUVELLE ROUTE : ÉCHANGE
+app.post("/api/player/exchange", async (req, res) => {
+  const { user_id, session_id, container, from, to, amount } = req.body;
+  const db = await readDB();
+  const player = db.sessions[session_id]?.players?.[user_id];
+  if (!player) return res.status(404).json({ error: "Joueur introuvable" });
+  
+  const result = processExchange(player, container, from, to, amount);
+  if (!result.success) return res.status(400).json({ error: result.error });
+  
+  await writeDB(db);
+  res.json({ success: true });
 });
 
 app.post("/api/token", async (req, res) => { 

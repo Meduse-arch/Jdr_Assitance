@@ -7,6 +7,57 @@ const CoinRow = ({ label, value, color }) => (
   </div>
 );
 
+const ConversionTable = () => (
+  <div className="mt-8 border-t border-gray-800 pt-6">
+    <h3 className="text-sm uppercase tracking-widest text-gray-500 font-semibold mb-4 text-center">
+      ⚖️ Tableau des Valeurs
+    </h3>
+    <div className="overflow-x-auto bg-[#151515] rounded-lg border border-gray-800 p-2">
+      <table className="w-full text-xs text-center border-collapse text-gray-400">
+        <thead>
+          <tr className="border-b border-gray-700 text-gray-200">
+            <th className="p-2 text-left">Pièce</th>
+            <th className="p-2 text-orange-600">PC</th>
+            <th className="p-2 text-gray-400">PA</th>
+            <th className="p-2 text-yellow-500">PO</th>
+            <th className="p-2 text-slate-300">PP</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-800">
+          <tr>
+            <td className="p-2 text-left font-bold text-orange-600">Cuivre</td>
+            <td className="p-2 font-mono">1</td>
+            <td className="p-2 font-mono opacity-50">1/10</td>
+            <td className="p-2 font-mono opacity-30">1/100</td>
+            <td className="p-2 font-mono opacity-20">1/1000</td>
+          </tr>
+          <tr>
+            <td className="p-2 text-left font-bold text-gray-400">Argent</td>
+            <td className="p-2 font-mono">10</td>
+            <td className="p-2 font-mono">1</td>
+            <td className="p-2 font-mono opacity-50">1/10</td>
+            <td className="p-2 font-mono opacity-30">1/100</td>
+          </tr>
+          <tr>
+            <td className="p-2 text-left font-bold text-yellow-500">Or</td>
+            <td className="p-2 font-mono">100</td>
+            <td className="p-2 font-mono">10</td>
+            <td className="p-2 font-mono">1</td>
+            <td className="p-2 font-mono opacity-50">1/10</td>
+          </tr>
+          <tr>
+            <td className="p-2 text-left font-bold text-slate-300">Platine</td>
+            <td className="p-2 font-mono">1000</td>
+            <td className="p-2 font-mono">100</td>
+            <td className="p-2 font-mono">10</td>
+            <td className="p-2 font-mono">1</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+);
+
 const Money = ({ playerData }) => {
   const m = playerData.money;
 
@@ -43,7 +94,10 @@ const Money = ({ playerData }) => {
         </div>
       </div>
       
-      <p className="text-center text-xs text-gray-600 italic">
+      {/* TABLEAU DE CONVERSION */}
+      <ConversionTable />
+
+      <p className="text-center text-xs text-gray-600 italic mt-8">
         Utilisez la zone d'Action pour faire des transferts ou modifier les montants.
       </p>
     </div>

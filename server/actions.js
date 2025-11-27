@@ -52,6 +52,8 @@ export function calculateStats(stats) {
 
 // --- GESTION ARGENT ---
 
+const COIN_VALUES = { pc: 1, pa: 10, po: 100, pp: 1000 };
+
 export function processTransfer(player, from, to, coin, amount) {
   if (amount <= 0) return { success: false, error: "Montant invalide" };
   if (from === to) return { success: false, error: "Source identique" };
@@ -82,9 +84,47 @@ export function processMoneyMod(player, target, action, coin, value) {
   return { success: true };
 }
 
+// NOUVELLE FONCTION : ÉCHANGE / CONVERSION
+export function processExchange(player, container, fromCoin, toCoin, amount) {
+  const val = Number(amount);
+  if (!val || val <= 0) return { success: false, error: "Valeur invalide" };
+  if (!['wallet', 'bank'].includes(container)) return { success: false, error: "Conteneur invalide" };
+  if (fromCoin === toCoin) return { success: false, error: "Même type de pièce" };
+
+  const currentStock = player.money[container][fromCoin] || 0;
+  if (currentStock < val) return { success: false, error: "Pas assez de pièces" };
+
+  const valueFrom = COIN_VALUES[fromCoin];
+  const valueTo = COIN_VALUES[toCoin];
+
+  // 1. Calcul de la valeur totale en "base PC" de ce qu'on veut convertir
+  const totalValue = val * valueFrom;
+
+  // 2. Combien de pièces "Cibles" on peut obtenir ?
+  const numTargetCoins = Math.floor(totalValue / valueTo);
+
+  // 3. Calcul du reste (ce qui n'a pas pu être converti)
+  const remainderValue = totalValue % valueTo;
+  
+  // 4. On convertit le reste en pièces d'origine (logique : on rend la monnaie)
+  const remainderInSourceCoin = remainderValue / valueFrom; 
+
+  // Mise à jour : On retire TOUT ce que le joueur a mis
+  player.money[container][fromCoin] -= val;
+  
+  // On ajoute les nouvelles pièces
+  player.money[container][toCoin] += numTargetCoins;
+
+  // On rend la monnaie (le reste)
+  if (remainderInSourceCoin > 0) {
+    player.money[container][fromCoin] += remainderInSourceCoin;
+  }
+
+  return { success: true, converted: numTargetCoins, refunded: remainderInSourceCoin };
+}
+
 // --- GESTION STATS & RESSOURCES ---
 
-// C'est cette fonction qui manquait ou était mal exportée
 export function processStatMod(player, statName, action, value) {
   const j = player.joueur;
   const val = Number(value);
@@ -93,7 +133,6 @@ export function processStatMod(player, statName, action, value) {
   const allowedStats = ['force', 'constitution', 'agilite', 'intelligence', 'perception'];
   if (!allowedStats.includes(statName)) return { success: false, error: "Stat inconnue" };
 
-  // Mise à jour de la stat de base
   if (action === 'add') {
     j[statName] = (j[statName] || 0) + val;
   } else if (action === 'remove') {
@@ -102,13 +141,11 @@ export function processStatMod(player, statName, action, value) {
     return { success: false, error: "Action inconnue" };
   }
 
-  // Recalcul des maximums (HP, Mana, Stam) via calculateStats
   const derived = calculateStats(j);
   j.hpMax = derived.hpMax;
   j.manaMax = derived.manaMax;
   j.stamMax = derived.stamMax;
 
-  // On s'assure que les valeurs courantes ne dépassent pas les nouveaux maximums
   j.hp = Math.min(j.hp, j.hpMax);
   j.mana = Math.min(j.mana, j.manaMax);
   j.stam = Math.min(j.stam, j.stamMax);
