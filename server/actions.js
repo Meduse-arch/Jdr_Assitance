@@ -8,18 +8,21 @@ function d(max) {
 }
 
 // Logique Avantage (a), Malus (m), Normal (n)
-function rollWithAdvantage(max, type) { // type: 'a', 'm', 'n'
+function rollWithAdvantage(max, type) {
   const m = Math.max(1, Number(max) || 1);
   const v1 = d(m);
   
   if (type === 'n' || !type) return { chosen: v1, list: [v1] };
   
   const v2 = d(m);
+  // 'a' = Avantage (Max), 'm' = Malus (Min)
   const chosen = type === 'a' ? Math.max(v1, v2) : Math.min(v1, v2);
   return { chosen, list: [v1, v2] };
 }
 
-// --- FONCTIONS EXISTANTES ---
+// --- FONCTIONS UTILITAIRES SERVEUR ---
+
+// Vérifie si l'utilisateur est Admin
 export async function checkAdmin(accessToken, guildId) {
   if (!guildId) return false;
   try {
@@ -30,15 +33,19 @@ export async function checkAdmin(accessToken, guildId) {
     const perms = BigInt(member.permissions || 0);
     const ADMIN_BIT = 8n;
     return (perms & ADMIN_BIT) === ADMIN_BIT;
-  } catch (e) { return false; }
+  } catch (e) {
+    return false;
+  }
 }
 
+// Calcul des stats dérivées
 export function calculateStats(stats) {
   const force = Number(stats.force) || 0;
   const constitution = Number(stats.constitution) || 0;
   const agilite = Number(stats.agilite) || 0;
   const intelligence = Number(stats.intelligence) || 0;
   const perception = Number(stats.perception) || 0;
+
   return {
     force, constitution, agilite, intelligence, perception,
     hpMax: Math.max(0, constitution * 4),
@@ -47,29 +54,53 @@ export function calculateStats(stats) {
   };
 }
 
+// Logique de transfert d'argent
 export function processTransfer(player, from, to, coin, amount) {
   if (amount <= 0) return { success: false, error: "Montant invalide" };
   if (from === to) return { success: false, error: "Source identique" };
+
   const current = player.money[from][coin] || 0;
   if (current < amount) return { success: false, error: "Fonds insuffisants" };
+
   player.money[from][coin] -= amount;
   player.money[to][coin] += amount;
+
   return { success: true };
 }
 
+// Logique de repos (Restauration)
 export function processRepos(player, type, target) {
   const j = player.joueur;
-  if (type === 'long') { j.hp = j.hpMax; j.mana = j.manaMax; j.stam = j.stamMax; return { success: true }; }
-  if (type === 'court') { j.mana = j.manaMax; j.stam = j.stamMax; return { success: true }; }
+
+  if (type === 'long') {
+    j.hp = j.hpMax;
+    j.mana = j.manaMax;
+    j.stam = j.stamMax;
+    return { success: true };
+  }
+  
+  if (type === 'court') {
+    j.mana = j.manaMax;
+    j.stam = j.stamMax;
+    return { success: true };
+  }
+  
   if (type === 'simple') {
-    if (target === 'mana') { j.mana = j.manaMax; return { success: true }; }
-    if (target === 'stam') { j.stam = j.stamMax; return { success: true }; }
+    if (target === 'mana') {
+      j.mana = j.manaMax;
+      return { success: true };
+    }
+    if (target === 'stam') {
+      j.stam = j.stamMax;
+      return { success: true };
+    }
     return { success: false, error: "Cible invalide" };
   }
-  return { success: false, error: "Type inconnu" };
+
+  return { success: false, error: "Type de repos inconnu" };
 }
 
-// --- PROCESS ROLL (Mis à jour) ---
+// --- PROCESS ROLL (LOGIQUE PRINCIPALE DES DÉS) ---
 export function processRoll(player, type, data) {
   const j = player.joueur;
   const advType = data.adv || 'n'; // 'a', 'm', 'n'
@@ -81,15 +112,19 @@ export function processRoll(player, type, data) {
     const statValue = j[statName];
     if (statValue === undefined) return { success: false, error: "Stat inconnue" };
 
+    // Vérification Stamina pour Force/Agilité
+    if ((statName === 'force' || statName === 'agilite') && j.stam <= 0) {
+      return { success: false, error: "NO_STAM" };
+    }
+
     const rollData = rollWithAdvantage(statValue, advType);
     const result = rollData.chosen + mod;
     
     let cost = 0;
     let costType = null;
 
-    // Coût Stamina pour Force/Agilité
     if (statName === 'force' || statName === 'agilite') {
-      cost = rollData.chosen; // Coût basé sur le dé brut (sans modif)
+      cost = rollData.chosen; // Coût = Résultat brut
       costType = 'Stamina';
       j.stam = Math.max(0, j.stam - cost);
     }
@@ -97,20 +132,51 @@ export function processRoll(player, type, data) {
     return { success: true, result, raw: rollData.chosen, list: rollData.list, cost, costType, stat: statName, mod };
   }
 
-  // 2. Roll de SORT (Basé sur Intelligence, coûte du Mana)
+  // 2. Roll de SORT (Intelligence)
   if (type === 'sort') {
-    const statValue = j.intelligence; // Les sorts utilisent l'intelligence
-    const rollData = rollWithAdvantage(statValue, advType);
-    const result = rollData.chosen + mod;
+    // Vérification Mana global
+    if (j.mana <= 0) {
+      return { success: false, error: "NO_MANA" };
+    }
 
-    // Coût Mana = Résultat du dé brut
-    const cost = rollData.chosen;
+    const effects = data.effects || [];
+    const modEffect = Number(data.modEffect) || 0;
+    
+    // Calcul Intelligence Disponible (Intel - Coût Effets)
+    const totalEffectCost = effects.reduce((a, b) => a + b, 0);
+    const intelDispo = j.intelligence - totalEffectCost;
+
+    // CONDITION STRICTE : Si Intel <= 0, impossible de lancer
+    if (intelDispo <= 0) {
+      return { success: false, error: `Intelligence insuffisante (${j.intelligence} - ${totalEffectCost} = ${intelDispo})` };
+    }
+
+    // Roll Principal (Réussite du sort)
+    const mainRoll = rollWithAdvantage(intelDispo, advType);
+    const mainResult = mainRoll.chosen + mod;
+
+    // Roll des Effets (Indépendants)
+    const effectResults = effects.map(val => {
+      const r = rollWithAdvantage(val, advType);
+      return r.chosen + modEffect;
+    });
+
+    // Coût en Mana = Résultat du jet principal
+    const cost = mainRoll.chosen;
     j.mana = Math.max(0, j.mana - cost);
 
-    return { success: true, result, raw: rollData.chosen, list: rollData.list, cost, costType: 'Mana', stat: 'Sort', mod };
+    return { 
+      success: true, 
+      result: mainResult, 
+      effectResults: effectResults, 
+      cost, 
+      costType: 'Mana',
+      stat: 'Sort',
+      mod
+    };
   }
 
-  // 3. Roll CLASSIQUE (Libre)
+  // 3. Roll CLASSIQUE (1d100...)
   if (type === 'dice') {
     const min = Number(data.min) || 1;
     const max = Number(data.max) || 100;
@@ -124,7 +190,6 @@ export function processRoll(player, type, data) {
       total += val;
       details.push(val);
     }
-    // On ajoute le modificateur au total
     total += mod;
 
     return { success: true, result: total, details, mod };
