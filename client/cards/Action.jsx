@@ -7,9 +7,13 @@ const Action = ({ sessionName, icon, playerData, auth, sessionId, onRefresh }) =
   const [isLoading, setIsLoading] = useState(false);
 
   // États Roll
-  const [rollTab, setRollTab] = useState('stat'); // 'stat' ou 'dice'
+  const [rollTab, setRollTab] = useState('stat'); // 'stat', 'sort', 'dice'
   const [diceParams, setDiceParams] = useState({ min: 1, max: 100, count: 1 });
+  const [advType, setAdvType] = useState('n'); // 'n', 'a', 'm'
+  const [modifier, setModifier] = useState(0);
+  
   const [rollResult, setRollResult] = useState(null);
+  const [rollDetails, setRollDetails] = useState(null);
   const [rollCost, setRollCost] = useState(null);
 
   const handleRepos = async (type, target = null) => {
@@ -30,7 +34,10 @@ const Action = ({ sessionName, icon, playerData, auth, sessionId, onRefresh }) =
   const handleRoll = async (type, dataPayload) => {
     setRollResult("..."); 
     setRollCost(null);
+    setRollDetails(null);
     
+    const finalPayload = { ...dataPayload, adv: advType, mod: modifier };
+
     try {
       const res = await fetch("/api/player/roll", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -38,16 +45,17 @@ const Action = ({ sessionName, icon, playerData, auth, sessionId, onRefresh }) =
           user_id: auth.user.id, 
           session_id: sessionId, 
           type, 
-          data: dataPayload 
+          data: finalPayload 
         }),
       });
       const data = await res.json();
       
       if (data.success) {
         setRollResult(data.result);
+        if (data.list) setRollDetails(data.list);
         if (data.cost > 0) {
           setRollCost(`-${data.cost} ${data.costType}`);
-          await onRefresh(); // Rafraichir les stats si coût
+          await onRefresh(); 
         }
       } else {
         setRollResult("Err");
@@ -56,42 +64,59 @@ const Action = ({ sessionName, icon, playerData, auth, sessionId, onRefresh }) =
     } catch (e) { setRollResult("Err"); }
   };
 
+  const tabClass = (active) => 
+    `flex-1 py-3 text-sm font-bold uppercase tracking-wider transition-colors border-b-2 ${
+      active ? 'border-indigo-500 text-indigo-400 bg-white/5' : 'border-transparent text-gray-500 hover:text-gray-300'
+    }`;
+
+  const advBtnClass = (type, current) => 
+    `flex-1 py-1 text-xs font-bold border rounded transition-all ${
+      current === type 
+        ? (type === 'a' ? 'bg-green-900/80 border-green-500 text-green-300' : type === 'm' ? 'bg-red-900/80 border-red-500 text-red-300' : 'bg-gray-600 border-gray-400 text-white')
+        : 'bg-[#111] border-gray-700 text-gray-500 hover:bg-gray-800'
+    }`;
+
   return (
-    <div className="flex flex-col items-center justify-center py-10 animate-fade-in relative w-full">
-      
-      {/* Stats */}
-      <div className="absolute top-0 right-0 flex flex-col sm:flex-row gap-1 sm:gap-3 bg-[#151515] border border-gray-700 rounded-lg px-3 py-2 text-xs font-mono shadow-lg z-10">
-        <span className="text-red-400 font-bold">HP {j.hp}/{j.hpMax}</span>
-        <span className="text-blue-400 font-bold">MP {j.mana}/{j.manaMax}</span>
-        <span className="text-green-400 font-bold">ST {j.stam}/{j.stamMax}</span>
+    <>
+      {/* --- CONTENU PRINCIPAL (AVEC ANIMATION) --- */}
+      <div className="flex flex-col items-center justify-center py-10 animate-fade-in relative w-full">
+        
+        {/* Stats en haut à droite */}
+        <div className="absolute top-0 right-0 flex flex-col sm:flex-row gap-1 sm:gap-3 bg-[#151515] border border-gray-700 rounded-lg px-3 py-2 text-xs font-mono shadow-lg z-10">
+          <span className="text-red-400 font-bold">HP {j.hp}/{j.hpMax}</span>
+          <span className="text-blue-400 font-bold">MP {j.mana}/{j.manaMax}</span>
+          <span className="text-green-400 font-bold">ST {j.stam}/{j.stamMax}</span>
+        </div>
+
+        <span className="text-6xl mb-4 block filter drop-shadow-lg mt-8">{icon || '🎲'}</span>
+        <h2 className="text-2xl font-bold text-white mb-2">Zone d'Actions</h2>
+        <p className="text-gray-400">Session : <span className="text-indigo-400 font-mono">{sessionName}</span></p>
+        
+        <div className="flex gap-4 mt-8">
+          <button onClick={() => setIsRollOpen(true)} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-lg transition-all flex items-center gap-2">
+            <span>🎲</span> Lancer un Dé
+          </button>
+          <button onClick={() => setIsReposOpen(true)} className="px-6 py-3 bg-blue-900/50 border border-blue-500/50 hover:bg-blue-800 text-blue-100 rounded-xl font-bold transition-all flex items-center gap-2 shadow-lg">
+            <span>💤</span> Se Reposer
+          </button>
+        </div>
       </div>
 
-      <span className="text-6xl mb-4 block filter drop-shadow-lg mt-8">{icon || '🎲'}</span>
-      <h2 className="text-2xl font-bold text-white mb-2">Zone d'Actions</h2>
-      <p className="text-gray-400">Session : <span className="text-indigo-400 font-mono">{sessionName}</span></p>
-      
-      <div className="flex gap-4 mt-8">
-        <button onClick={() => setIsRollOpen(true)} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-lg transition-all flex items-center gap-2">
-          <span>🎲</span> Lancer un Dé
-        </button>
-        <button onClick={() => setIsReposOpen(true)} className="px-6 py-3 bg-blue-900/50 border border-blue-500/50 hover:bg-blue-800 text-blue-100 rounded-xl font-bold transition-all flex items-center gap-2 shadow-lg">
-          <span>💤</span> Se Reposer
-        </button>
-      </div>
+      {/* --- POPUPS (HORS DE L'ANIMATION POUR EVITER LES BUGS D'AFFICHAGE) --- */}
 
-      {/* POPUP REPOS */}
+      {/* MODALE REPOS */}
       {isReposOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="bg-[#222] border border-gray-600 w-full max-w-sm rounded-xl p-6 shadow-2xl">
             <h2 className="text-xl font-bold text-white mb-4 text-center">Type de Repos</h2>
             <div className="flex flex-col gap-3">
               <button onClick={() => handleRepos('long')} disabled={isLoading} className="w-full p-4 bg-[#1a1a2e] border border-indigo-500/50 hover:bg-indigo-900/30 rounded-lg text-left group">
                 <div className="font-bold text-indigo-300 group-hover:text-white">✨ Repos Long</div>
-                <div className="text-xs text-gray-500">HP, Mana, Stamina Max</div>
+                <div className="text-xs text-gray-500 group-hover:text-gray-300">HP, Mana, Stamina Max</div>
               </button>
               <button onClick={() => handleRepos('court')} disabled={isLoading} className="w-full p-4 bg-[#1a2e1a] border border-green-500/50 hover:bg-green-900/30 rounded-lg text-left group">
                 <div className="font-bold text-green-300 group-hover:text-white">💫 Repos Court</div>
-                <div className="text-xs text-gray-500">Mana, Stamina Max</div>
+                <div className="text-xs text-gray-500 group-hover:text-gray-300">Mana, Stamina Max</div>
               </button>
               <div className="grid grid-cols-2 gap-3">
                 <button onClick={() => handleRepos('simple', 'mana')} disabled={isLoading} className="p-3 bg-[#111] border border-blue-500/30 hover:bg-blue-900/20 rounded-lg text-blue-400 font-bold">💧 Mana</button>
@@ -103,35 +128,44 @@ const Action = ({ sessionName, icon, playerData, auth, sessionId, onRefresh }) =
         </div>
       )}
 
-      {/* POPUP ROLL */}
+      {/* MODALE ROLL */}
       {isRollOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-[#222] border border-gray-600 w-full max-w-2xl rounded-xl p-6 shadow-2xl flex flex-col h-[500px]">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-[#222] border border-gray-600 w-full max-w-2xl rounded-xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
             
-            {/* Onglets */}
-            <div className="flex border-b border-gray-700 mb-4">
-              {/* Changement de nom ICI */}
-              <button onClick={() => { setRollTab('stat'); setRollResult(null); }} className={`flex-1 py-3 font-bold text-lg ${rollTab === 'stat' ? 'text-indigo-400 border-b-2 border-indigo-500' : 'text-gray-500 hover:text-gray-300'}`}>Stat</button>
-              <button onClick={() => { setRollTab('dice'); setRollResult(null); }} className={`flex-1 py-3 font-bold text-lg ${rollTab === 'dice' ? 'text-indigo-400 border-b-2 border-indigo-500' : 'text-gray-500 hover:text-gray-300'}`}>Dés Classiques</button>
+            {/* ONGLETS (Visibles maintenant !) */}
+            <div className="flex bg-[#151515] border-b border-gray-700 flex-none">
+              <button onClick={() => { setRollTab('stat'); setRollResult(null); }} className={tabClass(rollTab === 'stat')}>Stat</button>
+              <button onClick={() => { setRollTab('sort'); setRollResult(null); }} className={tabClass(rollTab === 'sort')}>Sort</button>
+              <button onClick={() => { setRollTab('dice'); setRollResult(null); }} className={tabClass(rollTab === 'dice')}>Classique</button>
             </div>
 
-            <div className="flex flex-1 gap-6 min-h-0">
+            <div className="flex flex-1 gap-4 p-4 min-h-0 overflow-hidden">
               {/* GAUCHE */}
               <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
                 {rollTab === 'stat' && (
-                  <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-2">
                     {['force', 'constitution', 'agilite', 'intelligence', 'perception'].map(stat => (
                       <button key={stat} onClick={() => handleRoll('stat', { stat })} className="flex justify-between items-center p-3 bg-[#1a1a1a] border border-gray-700 rounded-lg hover:bg-indigo-900/20 hover:border-indigo-500/50 transition-all group">
                         <span className="capitalize text-gray-300 font-bold group-hover:text-white">{stat}</span>
                         <span className="text-xs bg-[#111] px-2 py-1 rounded text-gray-500 font-mono">{j[stat]}</span>
                       </button>
                     ))}
-                    <p className="text-xs text-gray-500 mt-2 text-center">⚠️ Force & Agilité coûtent de la Stamina.</p>
+                    <p className="text-[10px] text-gray-600 mt-2 text-center uppercase tracking-wide">Force & Agi = Coût Stamina</p>
                   </div>
                 )}
-
+                {rollTab === 'sort' && (
+                  <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
+                    <div className="p-4 bg-blue-900/10 border border-blue-500/30 rounded-lg w-full">
+                      <p className="text-blue-300 font-bold mb-2">Lancer de Sort</p>
+                      <p className="text-sm text-gray-400">Utilise ton <strong className="text-white">Intelligence ({j.intelligence})</strong></p>
+                      <p className="text-xs text-gray-500 mt-2 bg-black/20 p-1 rounded">Coût Mana = Résultat du dé</p>
+                    </div>
+                    <button onClick={() => handleRoll('sort', {})} className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg transition-transform active:scale-95">✨ LANCER LE SORT</button>
+                  </div>
+                )}
                 {rollTab === 'dice' && (
-                  <div className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-4 pt-2">
                     <div>
                       <label className="text-xs text-gray-500 uppercase font-bold block mb-1">Minimum</label>
                       <input type="number" value={diceParams.min} onChange={(e) => setDiceParams({...diceParams, min: e.target.value})} className="w-full bg-[#151515] border border-gray-700 rounded p-2 text-white outline-none focus:border-indigo-500" />
@@ -148,33 +182,36 @@ const Action = ({ sessionName, icon, playerData, auth, sessionId, onRefresh }) =
                 )}
               </div>
 
-              {/* DROITE : DÉ */}
-              <div className="flex-1 flex flex-col items-center justify-center bg-[#151515] rounded-xl border border-gray-800 relative">
-                <button 
-                  onClick={() => rollTab === 'dice' && handleRoll('dice', diceParams)}
-                  className={`w-40 h-40 flex flex-col items-center justify-center rounded-2xl shadow-2xl transition-all transform active:scale-95 ${rollTab === 'dice' ? 'bg-indigo-600 hover:bg-indigo-500 cursor-pointer' : 'bg-gray-800 cursor-default'}`}
-                >
-                  {rollResult === null ? <span className="text-6xl opacity-50">🎲</span> : <span className="text-6xl font-bold text-white animate-bounce">{rollResult}</span>}
-                </button>
-                
-                {rollCost && (
-                  <div className="mt-4 px-3 py-1 bg-red-900/50 text-red-200 text-sm rounded border border-red-500/30 animate-pulse">
-                    Coût : {rollCost}
+              {/* DROITE */}
+              <div className="flex-1 flex flex-col gap-3">
+                <div className="flex-1 flex flex-col items-center justify-center bg-[#151515] rounded-xl border border-gray-800 relative min-h-[160px]">
+                  <button onClick={() => rollTab === 'dice' && handleRoll('dice', diceParams)} className={`w-32 h-32 flex flex-col items-center justify-center rounded-2xl shadow-2xl transition-all transform active:scale-95 ${rollTab === 'dice' ? 'bg-indigo-600 hover:bg-indigo-500 cursor-pointer' : 'bg-gray-800 cursor-default'}`}>
+                    {rollResult === null ? <span className="text-5xl opacity-50">🎲</span> : <span className="text-6xl font-bold text-white animate-bounce">{rollResult}</span>}
+                  </button>
+                  {rollDetails && rollDetails.length > 1 && <div className="mt-2 text-xs text-gray-500 font-mono">Dés : [{rollDetails.join(', ')}]</div>}
+                  {rollCost && <div className="absolute top-2 right-2 px-2 py-1 bg-red-900/80 text-red-200 text-[10px] rounded border border-red-500/30 font-bold animate-pulse">Coût: {rollCost}</div>}
+                </div>
+                <div className="bg-[#151515] border border-gray-700 p-3 rounded-lg flex-none">
+                  <div className="flex gap-1 mb-3">
+                    <button onClick={() => setAdvType('a')} className={advBtnClass('a', advType)}>Avantage</button>
+                    <button onClick={() => setAdvType('n')} className={advBtnClass('n', advType)}>Normal</button>
+                    <button onClick={() => setAdvType('m')} className={advBtnClass('m', advType)}>Désavant.</button>
                   </div>
-                )}
-
-                {rollTab === 'dice' && <p className="text-xs text-gray-500 mt-4">Clique sur le dé pour lancer</p>}
-                {rollTab === 'stat' && <p className="text-xs text-gray-500 mt-4">Clique sur une stat à gauche</p>}
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-gray-500 uppercase font-bold w-12">Modif</label>
+                    <input type="number" value={modifier} onChange={(e) => setModifier(parseInt(e.target.value) || 0)} className="flex-1 bg-[#111] border border-gray-700 rounded p-1 text-white text-sm text-center outline-none focus:border-indigo-500 font-mono" />
+                  </div>
+                </div>
               </div>
             </div>
 
-            <button onClick={() => setIsRollOpen(false)} className="w-full mt-6 py-3 bg-red-600/80 hover:bg-red-600 text-white font-bold rounded-lg transition-colors">
-              Fermer
-            </button>
+            <div className="p-4 border-t border-gray-800 bg-[#1a1a1a] flex-none">
+              <button onClick={() => setIsRollOpen(false)} className="w-full py-3 bg-red-600/80 hover:bg-red-600 text-white font-bold rounded-lg transition-colors shadow-md">Fermer</button>
+            </div>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 
