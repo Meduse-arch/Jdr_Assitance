@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { DiscordSDK } from "@discord/embedded-app-sdk";
 import Carousel from './Carousel';
+import VerticalMenu from './VerticalMenu'; // Assure-toi d'avoir créé ce fichier comme demandé avant
 import Hub from './Hub';
 import Start from './Start';
 import GameHome from './GameHome';
-import Admin from './Admin'; // <--- 1. Import de l'Admin
+import Admin from './Admin'; 
 
-// Import des cartes
 import Fiche from './cards/Fiche';
 import Inventaire from './cards/Inventaire';
 import Money from './cards/Money';
@@ -24,15 +24,17 @@ function App() {
   const [sessionList, setSessionList] = useState([]);
   const [playerData, setPlayerData] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [adminMode, setAdminMode] = useState(false); // <--- 2. Nouvel état pour le mode Admin
+  const [adminMode, setAdminMode] = useState(false);
   
-  // Navigation
+  // Navigation & Masquerade
   const [currentSession, setCurrentSession] = useState(null);
-  const [menuSection, setMenuSection] = useState(null); // 'game' | 'info' | null
+  const [menuSection, setMenuSection] = useState(null); 
   const [activeIndex, setActiveIndex] = useState(0); 
   const [openedCategory, setOpenedCategory] = useState(null);
+  
+  // Masquerade
+  const [masqueradeUser, setMasqueradeUser] = useState(null);
 
-  // Définition des items pour chaque section
   const itemsGame = [
     { id: 'outils', label: 'Action', icon: '🎲' }
   ];
@@ -71,6 +73,11 @@ function App() {
     setupDiscord();
   }, []);
 
+  const getActiveUser = () => {
+    if (masqueradeUser) return masqueradeUser;
+    return auth?.user;
+  };
+
   const checkAdminStatus = async (token) => {
     try {
       const res = await fetch("/api/check-admin", {
@@ -91,12 +98,17 @@ function App() {
     } catch (e) { console.error("Erreur sessions", e); }
   };
 
-  const fetchPlayerData = async () => {
-    if (!auth || !currentSession) return;
+  const fetchPlayerData = async (directData = null) => {
+    if (directData) {
+        setPlayerData(directData);
+        return;
+    }
+    const activeUser = getActiveUser();
+    if (!activeUser || !currentSession) return;
     try {
       const res = await fetch("/api/player", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: auth.user.id, session_id: currentSession }),
+        body: JSON.stringify({ user_id: activeUser.id, session_id: currentSession }),
       });
       const data = await res.json();
       setPlayerData(data);
@@ -105,16 +117,17 @@ function App() {
 
   useEffect(() => {
     if (currentSession) fetchPlayerData();
-  }, [currentSession, openedCategory]);
+  }, [currentSession, openedCategory, masqueradeUser]); 
 
   const handleJoinSession = async (sessionId) => {
+    const activeUser = getActiveUser();
     setStatus(`Connexion à ${sessionId}...`);
     try {
       const res = await fetch("/api/join", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
-          user_id: auth.user.id, 
-          username: auth.user.username, // Ajout du pseudo pour les logs
+          user_id: activeUser.id, 
+          username: activeUser.username,
           session_id: sessionId 
         }),
       });
@@ -127,7 +140,24 @@ function App() {
     } catch (e) { setStatus("Erreur serveur"); }
   };
 
-  // --- NOUVELLE FONCTION DE NAVIGATION ---
+  const handleMasquerade = (id, username, sessionId) => {
+      setMasqueradeUser({ id, username }); // 1. On définit l'identité
+      setCurrentSession(sessionId);        // 2. On définit la session
+      setAdminMode(false);                 // 3. On quitte l'admin
+      
+      // 4. NAVIGATION VERS GAMEHOME
+      setMenuSection(null);       // null = Affiche le menu GameHome (Choix Jeu/Infos)
+      setOpenedCategory(null);    // null = Aucune carte ouverte
+    };
+
+  const handleQuitMasquerade = () => {
+    setMasqueradeUser(null);
+    setCurrentSession(null);
+    setMenuSection(null);
+    setOpenedCategory(null);
+    setAdminMode(true);
+  };
+
   const handleMenuSelect = (section) => {
     if (section === 'game') {
       setOpenedCategory('outils');
@@ -136,11 +166,8 @@ function App() {
     }
   };
 
-  // --- RENDU ---
-
   if (!auth) return <div className="flex h-screen items-center justify-center text-xl text-gray-400 animate-pulse"><p>{status}</p></div>;
 
-  // 1. GESTION MODE ADMIN (Prioritaire)
   if (adminMode) {
     return (
       <Admin 
@@ -149,11 +176,16 @@ function App() {
         sessionList={sessionList}
         onRefresh={fetchSessions}
         onQuit={() => setAdminMode(false)}
+        onMasquerade={handleMasquerade} 
       />
     );
   }
 
-  // 2. Choix de session (Hub)
+  const effectiveAuth = masqueradeUser 
+    ? { ...auth, user: { ...auth.user, id: masqueradeUser.id, username: masqueradeUser.username } } 
+    : auth;
+
+  // Choix Session
   if (!currentSession) {
     return (
       <Hub 
@@ -162,20 +194,22 @@ function App() {
         sessionList={sessionList}
         onJoin={handleJoinSession} 
         onRefresh={fetchSessions}
-        onAdminMode={() => setAdminMode(true)} // <--- Activation via le bouton du Hub
+        onAdminMode={() => setAdminMode(true)}
       />
     );
   }
 
-  // 3. Création de personnage (si inexistant)
-  if (!playerData) {
+  // --- CORRECTION CRITIQUE ICI ---
+  // On vérifie si playerData existe ET si les stats (joueur) sont présentes.
+  // Si on a juste le username (comme dans ton image), on force l'affichage de Start.
+  if (!playerData || !playerData.joueur) {
     return (
       <div className="w-full max-w-4xl mx-auto p-4 min-h-screen flex flex-col">
         <div className="flex justify-between items-center mb-6">
            <button onClick={() => setCurrentSession(null)} className="text-sm text-gray-500 hover:text-white underline">Retour Hub</button>
         </div>
         <Start 
-          userId={auth.user.id} 
+          userId={effectiveAuth.user.id} 
           sessionId={currentSession} 
           onValidation={fetchPlayerData} 
         />
@@ -183,21 +217,27 @@ function App() {
     );
   }
 
-  // 4. Affichage d'une Carte Détail (Action, Fiche...)
+  // Affichage Carte Détail
   if (openedCategory) {
     let content;
     switch (openedCategory) {
       case 'fiche': content = <Fiche playerData={playerData} />; break;
-      case 'money': content = <Money playerData={playerData} onRefresh={fetchPlayerData} auth={auth} sessionId={currentSession} />; break;
+      case 'money': content = <Money playerData={playerData} onRefresh={fetchPlayerData} auth={effectiveAuth} sessionId={currentSession} />; break;
       case 'inventaire': content = <Inventaire />; break;
-      default: // 'outils' (Action)
-        content = <Action sessionName={currentSession} icon="🎲" playerData={playerData} auth={auth} sessionId={currentSession} onRefresh={fetchPlayerData} />;
+      default:
+        content = <Action sessionName={currentSession} icon="🎲" playerData={playerData} auth={effectiveAuth} sessionId={currentSession} onRefresh={fetchPlayerData} />;
     }
 
     const currentItemLabel = [...itemsGame, ...itemsInfo].find(i => i.id === openedCategory)?.label;
 
     return (
       <div className="w-full max-w-2xl mx-auto min-h-screen flex flex-col">
+        {masqueradeUser && (
+           <div className="bg-orange-600 text-white text-xs font-bold text-center py-1 sticky top-0 z-[60]">
+             MODE INCARNATION: {masqueradeUser.username} 
+             <button onClick={handleQuitMasquerade} className="ml-2 underline text-black">Quitter</button>
+           </div>
+        )}
         <div className="flex items-center justify-between p-4 border-b border-gray-800 bg-[#1a1a1a]/80 backdrop-blur sticky top-0 z-50">
           <button 
             onClick={() => setOpenedCategory(null)} 
@@ -215,18 +255,32 @@ function App() {
     );
   }
 
-  // 5. Choix "Jeu" vs "Infos" (GameHome)
+  // Menu Choix (Jeu / Info)
   if (!menuSection) {
-    return <GameHome onSelect={handleMenuSelect} sessionName={currentSession} onQuit={() => setCurrentSession(null)} />;
+    return (
+    <>
+        {masqueradeUser && (
+           <div className="bg-orange-600 text-white text-xs font-bold text-center py-1 sticky top-0 z-[60]">
+             MODE INCARNATION: {masqueradeUser.username} 
+             <button onClick={handleQuitMasquerade} className="ml-2 underline text-black">Quitter</button>
+           </div>
+        )}
+        <GameHome onSelect={handleMenuSelect} sessionName={currentSession} onQuit={() => setCurrentSession(null)} />
+    </>
+    );
   }
 
-  // 6. Carrousel (Menu Info uniquement désormais, car Game saute cette étape)
   const currentItems = menuSection === 'game' ? itemsGame : itemsInfo;
   const sectionTitle = menuSection === 'game' ? 'Zone de Jeu' : 'Zone d\'Infos';
 
   return (
     <div className="w-full max-w-2xl mx-auto pb-10 pt-4 px-4 flex flex-col min-h-screen">
-      
+      {masqueradeUser && (
+           <div className="bg-orange-600 text-white text-xs font-bold text-center py-1 mb-2 rounded">
+             MODE INCARNATION: {masqueradeUser.username} 
+             <button onClick={handleQuitMasquerade} className="ml-2 underline text-black">Quitter</button>
+           </div>
+      )}
       <div className="flex justify-between items-center mb-6 px-4 py-3 bg-[#1a1a1a] rounded-full border border-gray-800 shadow-md">
         <button onClick={() => setMenuSection(null)} className="px-4 py-1 text-xs font-bold uppercase tracking-wider bg-gray-700 hover:bg-gray-600 text-white rounded-full transition-colors flex items-center gap-2">
           <span>&#8592;</span> Retour

@@ -6,6 +6,7 @@ const Start = ({ userId, sessionId, onValidation }) => {
   });
   const [moneyRoll, setMoneyRoll] = useState(null);
   const [rerollsLeft, setRerollsLeft] = useState(2);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const rollDice = (count, faces) => {
     let sum = 0;
@@ -43,8 +44,8 @@ const Start = ({ userId, sessionId, onValidation }) => {
   };
 
   const handleSubmit = async () => {
+    setIsSubmitting(true);
     try {
-      // Appel à la route INIT qui crée réellement la fiche
       const res = await fetch("/api/player/init", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -56,11 +57,18 @@ const Start = ({ userId, sessionId, onValidation }) => {
         }),
       });
       const data = await res.json();
-      if (data.success) {
-        onValidation(); // Signale à App.jsx que c'est fini
+      
+      if (data.success && data.player) {
+        // CORRECTION : On passe les données directement pour mettre à jour App.jsx sans attente
+        onValidation(data.player); 
+      } else {
+        alert("Erreur serveur : " + (data.error || "Inconnue"));
+        setIsSubmitting(false);
       }
     } catch (e) {
-      alert("Erreur création fiche");
+      console.error(e);
+      alert("Erreur de connexion lors de la création.");
+      setIsSubmitting(false);
     }
   };
 
@@ -101,7 +109,7 @@ const Start = ({ userId, sessionId, onValidation }) => {
 
                   <button 
                     onClick={() => handleRollStat(stat)}
-                    disabled={val !== null && rerollsLeft <= 0}
+                    disabled={isSubmitting || (val !== null && rerollsLeft <= 0)}
                     className={`p-2 rounded-full transition-all ${
                       val === null 
                         ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg hover:scale-110' 
@@ -109,7 +117,6 @@ const Start = ({ userId, sessionId, onValidation }) => {
                           ? 'bg-gray-700 hover:bg-indigo-900 text-indigo-300' 
                           : 'bg-gray-800 text-gray-600 cursor-not-allowed'
                     }`}
-                    title={val === null ? "Lancer" : "Relancer"}
                   >
                     🎲
                   </button>
@@ -135,7 +142,7 @@ const Start = ({ userId, sessionId, onValidation }) => {
               </div>
               <button 
                 onClick={handleRollMoney}
-                disabled={moneyRoll !== null}
+                disabled={isSubmitting || moneyRoll !== null}
                 className={`px-4 py-2 rounded-lg font-bold transition-colors ${
                   moneyRoll === null 
                     ? 'bg-orange-600 hover:bg-orange-500 text-white' 
@@ -159,17 +166,24 @@ const Start = ({ userId, sessionId, onValidation }) => {
         </div>
       </div>
 
-      {/* BOUTON FINISH */}
       <button 
         onClick={handleSubmit}
-        disabled={!canValidate}
+        disabled={!canValidate || isSubmitting}
         className={`w-full mt-8 py-4 font-bold text-lg rounded-xl transition-all transform ${
-          canValidate 
+          canValidate && !isSubmitting
             ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white shadow-lg hover:scale-[1.02]' 
             : 'bg-gray-800 text-gray-500 cursor-not-allowed opacity-50'
         }`}
       >
-        {canValidate ? "✨ Terminer et créer la fiche" : "Termine tes lancers pour valider"}
+        {isSubmitting ? (
+          <span className="flex items-center justify-center gap-2">
+            <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+            Création en cours...
+          </span>
+        ) : canValidate ? "✨ Terminer et créer la fiche" : "Termine tes lancers pour valider"}
       </button>
     </div>
   );
