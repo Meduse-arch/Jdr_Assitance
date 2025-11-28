@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { DiscordSDK } from "@discord/embedded-app-sdk";
 import Carousel from './Carousel';
-import VerticalMenu from './VerticalMenu'; // Assure-toi d'avoir créé ce fichier comme demandé avant
+import VerticalMenu from './VerticalMenu';
 import Hub from './Hub';
 import Start from './Start';
 import GameHome from './GameHome';
@@ -34,6 +34,9 @@ function App() {
   
   // Masquerade
   const [masqueradeUser, setMasqueradeUser] = useState(null);
+  
+  // --- NOUVEAU : Sauvegarde de l'état Admin ---
+  const [savedAdminState, setSavedAdminState] = useState(null);
 
   const itemsGame = [
     { id: 'outils', label: 'Action', icon: '🎲' }
@@ -140,14 +143,21 @@ function App() {
     } catch (e) { setStatus("Erreur serveur"); }
   };
 
-  const handleMasquerade = (id, username, sessionId) => {
-      setMasqueradeUser({ id, username }); // 1. On définit l'identité
-      setCurrentSession(sessionId);        // 2. On définit la session
-      setAdminMode(false);                 // 3. On quitte l'admin
+  // --- MODIFIÉ : On accepte maintenant l'onglet (tab) en paramètre
+  const handleMasquerade = (id, username, sessionId, currentTab) => {
+      // 1. On sauvegarde l'état exact de l'admin
+      setSavedAdminState({
+        category: 'fiche', // On vient forcément de la fiche
+        session: sessionId,
+        tab: currentTab || 'joueur'
+      });
+
+      setMasqueradeUser({ id, username }); 
+      setCurrentSession(sessionId);        
+      setAdminMode(false);                 
       
-      // 4. NAVIGATION VERS GAMEHOME
-      setMenuSection(null);       // null = Affiche le menu GameHome (Choix Jeu/Infos)
-      setOpenedCategory(null);    // null = Aucune carte ouverte
+      setMenuSection(null);       
+      setOpenedCategory(null);    
     };
 
   const handleQuitMasquerade = () => {
@@ -155,6 +165,8 @@ function App() {
     setCurrentSession(null);
     setMenuSection(null);
     setOpenedCategory(null);
+    
+    // On réactive le mode admin. Le state "savedAdminState" sera passé via les props dans le return
     setAdminMode(true);
   };
 
@@ -176,7 +188,8 @@ function App() {
         sessionList={sessionList}
         onRefresh={fetchSessions}
         onQuit={() => setAdminMode(false)}
-        onMasquerade={handleMasquerade} 
+        onMasquerade={handleMasquerade}
+        initialState={savedAdminState} // <--- ON PASSE L'ÉTAT SAUVEGARDÉ ICI
       />
     );
   }
@@ -185,7 +198,6 @@ function App() {
     ? { ...auth, user: { ...auth.user, id: masqueradeUser.id, username: masqueradeUser.username } } 
     : auth;
 
-  // Choix Session
   if (!currentSession) {
     return (
       <Hub 
@@ -199,9 +211,6 @@ function App() {
     );
   }
 
-  // --- CORRECTION CRITIQUE ICI ---
-  // On vérifie si playerData existe ET si les stats (joueur) sont présentes.
-  // Si on a juste le username (comme dans ton image), on force l'affichage de Start.
   if (!playerData || !playerData.joueur) {
     return (
       <div className="w-full max-w-4xl mx-auto p-4 min-h-screen flex flex-col">
@@ -217,7 +226,6 @@ function App() {
     );
   }
 
-  // Affichage Carte Détail
   if (openedCategory) {
     let content;
     switch (openedCategory) {
@@ -255,7 +263,6 @@ function App() {
     );
   }
 
-  // Menu Choix (Jeu / Info)
   if (!menuSection) {
     return (
     <>

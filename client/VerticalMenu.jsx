@@ -28,9 +28,8 @@ const VerticalMenu = ({ items, activeIndex, onNavigate, onSelect }) => {
       <div className="absolute w-full h-[80px] bg-gradient-to-r from-transparent via-white/5 to-transparent pointer-events-none z-0" />
 
       {items.map((item, index) => {
-        // Calcul de la position relative (pour l'effet de boucle infini visuel)
         let offset = index - activeIndex;
-        // Correction pour que l'élément boucle proprement si la liste est longue
+        // Boucle infini visuelle
         if (offset < -2) offset += items.length;
         if (offset > 2) offset -= items.length;
 
@@ -39,7 +38,6 @@ const VerticalMenu = ({ items, activeIndex, onNavigate, onSelect }) => {
 
         const isActive = offset === 0;
         
-        // Styles dynamiques basés sur la distance du centre
         const style = {
           transform: `translateY(${offset * 100}%) scale(${1 - Math.abs(offset) * 0.15}) perspective(500px) rotateX(${offset * -10}deg)`,
           opacity: 1 - Math.abs(offset) * 0.4,
@@ -55,14 +53,14 @@ const VerticalMenu = ({ items, activeIndex, onNavigate, onSelect }) => {
                 ? 'bg-[#222] border-indigo-500 text-white scale-105 shadow-[0_0_20px_rgba(99,102,241,0.3)]' 
                 : 'bg-[#151515] border-gray-800 text-gray-500'
               }`}
-            style={{ top: '35%', ...style }} // 35% pour centrer verticalement
+            style={{ top: '35%', ...style }} 
           >
             <span className="text-3xl">{item.icon}</span>
             <div className="flex flex-col text-left">
               <span className={`font-bold uppercase tracking-wider text-sm ${isActive ? 'text-white' : 'text-gray-500'}`}>
                 {item.label}
               </span>
-              {isActive && <span className="text-[10px] text-indigo-400 font-bold animate-pulse">CLIQUER POUR OUVRIR</span>}
+              {/* Texte supprimé ici pour un design plus épuré */}
             </div>
           </div>
         );

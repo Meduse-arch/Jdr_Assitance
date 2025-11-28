@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-const AdminSession = ({ accessToken, guildId, sessionList, onRefresh, onBack }) => {
+const AdminSession = ({ accessToken, guildId, sessionList, onRefresh }) => {
   const [newSessionName, setNewSessionName] = useState("");
   const [overwriteWarning, setOverwriteWarning] = useState(null);
   const [sessionToDelete, setSessionToDelete] = useState("");
@@ -62,13 +62,11 @@ const AdminSession = ({ accessToken, guildId, sessionList, onRefresh, onBack }) 
   };
 
   return (
-    <div className="flex-1 animate-fade-in flex flex-col h-full">
-      <button 
-        onClick={onBack} 
-        className="mb-4 text-xs text-orange-400 hover:text-orange-300 underline self-start flex items-center gap-1"
-      >
-        <span>←</span> Retour Menu
-      </button>
+    <div className="flex-1 animate-fade-in flex flex-col h-full p-4">
+      {/* HEADER SIMPLE */}
+      <h2 className="text-lg font-bold text-white mb-6 border-b border-gray-800 pb-2 flex items-center gap-2">
+        <span>🌍</span> Gestion des Sessions
+      </h2>
       
       <div className="space-y-6 overflow-y-auto custom-scrollbar pr-2">
         

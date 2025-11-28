@@ -1,22 +1,23 @@
 import React, { useState } from 'react';
 import RollModal from './modals/RollModal';
 import PersonnageModal from './modals/PersonnageModal';
-import MoneyModal from './modals/MoneyModal'; // Réimport de la modale Argent
+import MoneyModal from './modals/MoneyModal';
+import CreateItemModal from './modals/CreateItemModal'; // <--- IMPORT
 
 const Action = ({ sessionName, icon, playerData, auth, sessionId, onRefresh }) => {
   const j = playerData.joueur;
   const wallet = playerData.money.wallet;
 
-  // États d'ouverture des Modales
   const [isRollOpen, setIsRollOpen] = useState(false);
   const [isPersonnageOpen, setIsPersonnageOpen] = useState(false);
-  const [isMoneyOpen, setIsMoneyOpen] = useState(false); // État pour la modale Argent
+  const [isMoneyOpen, setIsMoneyOpen] = useState(false);
+  const [isCreateItemOpen, setIsCreateItemOpen] = useState(false); // <--- ETAT
 
   return (
     <>
       <div className="flex flex-col items-center justify-center py-10 animate-fade-in relative w-full">
         
-        {/* HUD ARGENT (Info rapide) */}
+        {/* HUD ARGENT */}
         <div className="absolute top-0 left-0 flex flex-row items-center gap-3 bg-[#151515] border border-gray-700 rounded-lg px-4 py-2 text-xs font-mono shadow-lg z-10">
           <div className="flex items-center gap-2 text-orange-600"><span className="font-bold">PC</span> <span>{wallet.pc}</span></div>
           <div className="w-px h-3 bg-gray-800"></div>
@@ -43,12 +44,14 @@ const Action = ({ sessionName, icon, playerData, auth, sessionId, onRefresh }) =
           <button onClick={() => setIsRollOpen(true)} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-lg transition-all flex items-center justify-center gap-2"><span>🎲</span> Lancer un Dé</button>
           
           <div className="grid grid-cols-2 gap-4">
-             {/* BOUTON PERSONNAGE */}
              <button onClick={() => setIsPersonnageOpen(true)} className="px-4 py-3 bg-emerald-900/50 border border-emerald-500/50 hover:bg-emerald-800 text-emerald-100 rounded-xl font-bold transition-all flex items-center justify-center gap-2 shadow-lg"><span>👤</span> Personnage</button>
-             
-             {/* BOUTON ARGENT (Restauré) */}
              <button onClick={() => setIsMoneyOpen(true)} className="px-4 py-3 bg-yellow-900/40 border border-yellow-500/40 hover:bg-yellow-800/60 text-yellow-100 rounded-xl font-bold transition-all flex items-center justify-center gap-2 shadow-lg"><span>💰</span> Argent</button>
           </div>
+
+          {/* BOUTON CRÉER OBJET */}
+          <button onClick={() => setIsCreateItemOpen(true)} className="px-6 py-3 bg-slate-700/50 hover:bg-slate-600 border border-slate-600 text-gray-200 rounded-xl font-bold shadow-lg transition-all flex items-center justify-center gap-2 mt-2">
+            <span>🛠️</span> Créer un Objet
+          </button>
         </div>
       </div>
 
@@ -71,7 +74,6 @@ const Action = ({ sessionName, icon, playerData, auth, sessionId, onRefresh }) =
         onRefresh={onRefresh}
       />
 
-      {/* MODALE ARGENT (Restaurée) */}
       <MoneyModal 
         isOpen={isMoneyOpen} 
         onClose={() => setIsMoneyOpen(false)} 
@@ -79,6 +81,15 @@ const Action = ({ sessionName, icon, playerData, auth, sessionId, onRefresh }) =
         sessionId={sessionId} 
         onRefresh={onRefresh} 
         playerData={playerData} 
+      />
+
+      {/* MODALE CRÉATION OBJET */}
+      <CreateItemModal 
+        isOpen={isCreateItemOpen} 
+        onClose={() => setIsCreateItemOpen(false)} 
+        auth={auth} 
+        sessionId={sessionId} 
+        onRefresh={onRefresh} 
       />
 
     </>

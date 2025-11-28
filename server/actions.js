@@ -1,4 +1,11 @@
+// Fichier : server/actions.js
 import fetch from "node-fetch";
+
+// --- CACHE ADMIN (NOUVEAU) ---
+// On garde en mémoire qui est admin pour éviter de demander à Discord à chaque clic.
+// Cela règle les problèmes de latence et de "clignotement" du mode admin.
+const adminCache = new Map();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 // --- UTILITAIRES DÉS ---
 function d(max) {
@@ -7,7 +14,6 @@ function d(max) {
   return Math.floor(Math.random() * m) + 1;
 }
 
-// Fonction améliorée pour retourner plus d'infos
 function rollWithAdvantage(max, type) {
   const m = Math.max(1, Number(max) || 1);
   const v1 = d(m);
@@ -15,9 +21,8 @@ function rollWithAdvantage(max, type) {
   if (type === 'n' || !type) return { chosen: v1, list: [v1], ignored: null };
   
   const v2 = d(m);
-  // 'a' = Avantage (Max), 'm' = Malus (Min)
   const chosen = type === 'a' ? Math.max(v1, v2) : Math.min(v1, v2);
-  const ignored = v1 === chosen ? v2 : v1; // Note: si v1==v2, l'un est choisi, l'autre ignoré, peu importe lequel
+  const ignored = v1 === chosen ? v2 : v1; 
   
   return { chosen, list: [v1, v2], ignored };
 }
@@ -26,15 +31,39 @@ function rollWithAdvantage(max, type) {
 
 export async function checkAdmin(accessToken, guildId) {
   if (!guildId) return false;
+
+  // 1. On regarde si on connait déjà la réponse (Cache)
+  const cached = adminCache.get(accessToken);
+  if (cached && cached.expires > Date.now()) {
+    return cached.isAdmin;
+  }
+
+  // 2. Si pas en mémoire, on demande à Discord
   try {
     const response = await fetch(`https://discord.com/api/users/@me/guilds/${guildId}/member`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
+    
+    if (!response.ok) {
+        // En cas d'erreur (ex: Discord trop lent), on sécurise en renvoyant false
+        console.error(`[AUTH] Erreur Discord: ${response.status}`);
+        return false;
+    }
+
     const member = await response.json();
     const perms = BigInt(member.permissions || 0);
     const ADMIN_BIT = 8n;
-    return (perms & ADMIN_BIT) === ADMIN_BIT;
+    const isAdmin = (perms & ADMIN_BIT) === ADMIN_BIT;
+
+    // 3. On stocke la réponse pour 5 minutes
+    adminCache.set(accessToken, { isAdmin, expires: Date.now() + CACHE_DURATION });
+    
+    // Petit nettoyage si trop de monde (sécurité mémoire)
+    if (adminCache.size > 1000) adminCache.clear();
+
+    return isAdmin;
   } catch (e) {
+    console.error("[AUTH] Erreur checkAdmin:", e);
     return false;
   }
 }
@@ -207,7 +236,7 @@ export function processRoll(player, type, data) {
   const advType = data.adv || 'n'; 
   const mod = Number(data.mod) || 0;
 
-  // Helper pour afficher le type d'avantage
+  // Helper pour afficher le type d'avantage dans les logs
   const advLabel = advType === 'a' ? 'AVANTAGE' : advType === 'm' ? 'DÉSAVANTAGE' : 'NORMAL';
 
   if (type === 'stat') {
@@ -231,12 +260,8 @@ export function processRoll(player, type, data) {
       j.stam = Math.max(0, j.stam - cost);
     }
 
-    // LOG DÉTAILLÉ STAT
     console.log(`[ROLL: STAT] ${statName.toUpperCase()} | Mode: ${advLabel}`);
-    console.log(`  > Dés lancés: [${rollData.list.join(', ')}]`);
-    console.log(`  > Choix: ${rollData.chosen}`);
-    console.log(`  > Modif: ${mod}`);
-    console.log(`  > Résultat Final: ${result}`);
+    console.log(`  > Dés: [${rollData.list.join(', ')}] -> ${rollData.chosen} + ${mod} = ${result}`);
     if (cost > 0) console.log(`  > Coût: -${cost} ${costType}`);
 
     return { success: true, result, raw: rollData.chosen, list: rollData.list, cost, costType, stat: statName, mod };
@@ -266,29 +291,19 @@ export function processRoll(player, type, data) {
     const cost = mainRoll.chosen;
     j.mana = Math.max(0, j.mana - cost);
 
-    // LOG DÉTAILLÉ SORT
     console.log(`[ROLL: SORT] Mode: ${advLabel}`);
     console.log(`  > Intel Dispo: ${intelDispo} (Base: ${j.intelligence}, Coût Effets: ${totalEffectCost})`);
-    console.log(`  > Jet Principal: [${mainRoll.list.join(', ')}] -> ${mainRoll.chosen} + Mod(${mod}) = ${mainResult}`);
+    console.log(`  > Jet Principal: ${mainRoll.chosen} + ${mod} = ${mainResult}`);
     console.log(`  > Coût Mana: -${cost}`);
-    if (effects.length > 0) {
-      console.log(`  > Effets (${effects.length}):`);
-      effects.forEach((effVal, idx) => {
-        // Note: effectResults est un simple tableau de valeurs, on ne garde pas l'historique adv pour chaque effet individuellement ici pour simplifier le retour
-        console.log(`    - Effet ${idx + 1} (Base ${effVal}): Résultat ${effectResults[idx]} (avec mod ${modEffect})`);
-      });
-    }
 
     return { success: true, result: mainResult, effectResults: effectResults, cost, costType: 'Mana', stat: 'Sort', mod };
   }
 
-  // MODIFICATION POUR DÉS CLASSIQUES
   if (type === 'dice') {
     const min = Number(data.min) || 1;
     const max = Number(data.max) || 100;
     const count = Math.max(1, Number(data.count) || 1);
 
-    // Fonction locale pour tirer un set de dés
     const rollSet = () => {
       let sum = 0;
       let rolls = [];
@@ -304,50 +319,27 @@ export function processRoll(player, type, data) {
     let chosenSet;
     let ignoredSet = null;
 
-    // Si pas d'avantage/désavantage
     if (advType === 'n') {
       chosenSet = rollSet();
-      resultObj = {
-        result: chosenSet.sum + mod,
-        details: chosenSet.rolls,
-        mod
-      };
+      resultObj = { result: chosenSet.sum + mod, details: chosenSet.rolls, mod };
     } else {
-      // Si Avantage/Désavantage, on tire DEUX sets complets
       const set1 = rollSet();
       const set2 = rollSet();
-      
-      let isSet1Chosen;
-      if (advType === 'a') {
-        isSet1Chosen = set1.sum >= set2.sum; // Avantage : on garde le plus grand total
-      } else {
-        isSet1Chosen = set1.sum <= set2.sum; // Désavantage : on garde le plus petit total
-      }
+      const isSet1Chosen = advType === 'a' ? (set1.sum >= set2.sum) : (set1.sum <= set2.sum);
 
       chosenSet = isSet1Chosen ? set1 : set2;
       ignoredSet = isSet1Chosen ? set2 : set1;
 
       resultObj = {
         result: chosenSet.sum + mod,
-        details: chosenSet.rolls, // On renvoie les dés du set choisi
+        details: chosenSet.rolls,
         mod,
-        // On peut renvoyer plus d'infos si le front veut afficher les deux lancers
         ignoredDetails: ignoredSet.rolls, 
         ignoredSum: ignoredSet.sum
       };
     }
 
-    // LOG DÉTAILLÉ DÉ SIMPLE
-    console.log(`[ROLL: DICE] ${count}d(${min}-${max}) | Mode: ${advLabel}`);
-    if (ignoredSet) {
-      console.log(`  > Lancer 1 (Somme: ${chosenSet.sum === rollSet().sum ? '?' : '?'}) : [${chosenSet.rolls.join(', ')}]`); // Simplification log
-      console.log(`  > Set Choisi: [${chosenSet.rolls.join(', ')}] (Somme: ${chosenSet.sum})`);
-      console.log(`  > Set Ignoré: [${ignoredSet.rolls.join(', ')}] (Somme: ${ignoredSet.sum})`);
-    } else {
-      console.log(`  > Résultats: [${chosenSet.rolls.join(', ')}] (Somme: ${chosenSet.sum})`);
-    }
-    console.log(`  > Modif: ${mod}`);
-    console.log(`  > Total Final: ${resultObj.result}`);
+    console.log(`[ROLL: DICE] ${count}d(${min}-${max}) | Mode: ${advLabel} | Total: ${resultObj.result}`);
 
     return { success: true, ...resultObj };
   }
