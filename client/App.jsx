@@ -34,8 +34,6 @@ function App() {
   
   // Masquerade
   const [masqueradeUser, setMasqueradeUser] = useState(null);
-  
-  // --- NOUVEAU : Sauvegarde de l'état Admin ---
   const [savedAdminState, setSavedAdminState] = useState(null);
 
   const itemsGame = [
@@ -143,19 +141,11 @@ function App() {
     } catch (e) { setStatus("Erreur serveur"); }
   };
 
-  // --- MODIFIÉ : On accepte maintenant l'onglet (tab) en paramètre
   const handleMasquerade = (id, username, sessionId, currentTab) => {
-      // 1. On sauvegarde l'état exact de l'admin
-      setSavedAdminState({
-        category: 'fiche', // On vient forcément de la fiche
-        session: sessionId,
-        tab: currentTab || 'joueur'
-      });
-
+      setSavedAdminState({ category: 'fiche', session: sessionId, tab: currentTab || 'joueur' });
       setMasqueradeUser({ id, username }); 
       setCurrentSession(sessionId);        
       setAdminMode(false);                 
-      
       setMenuSection(null);       
       setOpenedCategory(null);    
     };
@@ -165,8 +155,6 @@ function App() {
     setCurrentSession(null);
     setMenuSection(null);
     setOpenedCategory(null);
-    
-    // On réactive le mode admin. Le state "savedAdminState" sera passé via les props dans le return
     setAdminMode(true);
   };
 
@@ -189,7 +177,7 @@ function App() {
         onRefresh={fetchSessions}
         onQuit={() => setAdminMode(false)}
         onMasquerade={handleMasquerade}
-        initialState={savedAdminState} // <--- ON PASSE L'ÉTAT SAUVEGARDÉ ICI
+        initialState={savedAdminState} 
       />
     );
   }
@@ -229,9 +217,16 @@ function App() {
   if (openedCategory) {
     let content;
     switch (openedCategory) {
-      case 'fiche': content = <Fiche playerData={playerData} />; break;
-      case 'money': content = <Money playerData={playerData} onRefresh={fetchPlayerData} auth={effectiveAuth} sessionId={currentSession} />; break;
-      case 'inventaire': content = <Inventaire />; break;
+      // AJOUT DES PROPS MANQUANTES POUR FICHE
+      case 'fiche': 
+        content = <Fiche playerData={playerData} auth={effectiveAuth} sessionId={currentSession} onRefresh={fetchPlayerData} />; 
+        break;
+      case 'money': 
+        content = <Money playerData={playerData} onRefresh={fetchPlayerData} auth={effectiveAuth} sessionId={currentSession} />; 
+        break;
+      case 'inventaire': 
+        content = <Inventaire playerData={playerData} onRefresh={fetchPlayerData} auth={effectiveAuth} sessionId={currentSession} />; 
+        break;
       default:
         content = <Action sessionName={currentSession} icon="🎲" playerData={playerData} auth={effectiveAuth} sessionId={currentSession} onRefresh={fetchPlayerData} />;
     }

@@ -4,35 +4,50 @@ const RollModal = ({ isOpen, onClose, auth, sessionId, onRefresh, playerData }) 
   if (!isOpen) return null;
 
   const j = playerData.joueur;
-  const [activeTab, setActiveTab] = useState('stat'); // stat, sort, dice
+  const eq = playerData.equipment || {};
   
-  // États Dices
+  const [activeTab, setActiveTab] = useState('stat');
   const [diceParams, setDiceParams] = useState({ min: 1, max: 100, count: 1 });
   const [advType, setAdvType] = useState('n'); 
   const [modifier, setModifier] = useState(0);
-  
-  // États Sorts
   const [effectMod, setEffectMod] = useState(0);
   const [effects, setEffects] = useState([{ id: 1, val: 0, res: null }]); 
-
   const [rollResult, setRollResult] = useState(null);
   const [rollDetails, setRollDetails] = useState(null);
   const [rollCost, setRollCost] = useState(null);
   const [rollError, setRollError] = useState(null);
 
-  // Helpers Sorts
+  // NOUVEAU : État des armes actives
+  const [activeWeapons, setActiveWeapons] = useState({ arme1: true, arme2: true });
+
+  const toggleWeapon = (slot) => setActiveWeapons(prev => ({ ...prev, [slot]: !prev[slot] }));
+
+  // Calcul du coût total effets pour l'affichage (ne bloque pas le serveur, purement indicatif)
   const totalEffectCost = effects.reduce((sum, e) => sum + (parseInt(e.val) || 0), 0);
-  const currentIntel = j.intelligence - totalEffectCost;
-  const canCastSpell = currentIntel > 0;
+  
+  // On doit calculer l'Intel Totale pour l'affichage prédictif (approximatif côté client)
+  // Le vrai calcul se fait côté serveur
+  let clientIntel = j.intelligence;
+  // TODO: Idéalement, on recalculerait tout comme sur le serveur, mais ici on affiche juste la base
+  
+  const currentIntel = clientIntel - totalEffectCost;
+  const canCastSpell = currentIntel > 0; // Indicatif
 
   const handleRoll = async (type, dataPayload) => {
     setRollResult("..."); setRollCost(null); setRollDetails(null); setRollError(null);
     if (type === 'sort') setEffects(prev => prev.map(e => ({ ...e, res: null })));
+    
+    // Construction liste armes actives
+    const activeWeaponList = [];
+    if (activeWeapons.arme1 && eq.arme1) activeWeaponList.push('arme1');
+    if (activeWeapons.arme2 && eq.arme2) activeWeaponList.push('arme2');
+
     const finalPayload = { ...dataPayload, adv: advType, mod: modifier };
     if (type === 'sort') {
       finalPayload.effects = effects.map(e => parseInt(e.val) || 0);
       finalPayload.modEffect = effectMod;
     }
+
     try {
       const res = await fetch("/api/player/roll", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -41,7 +56,8 @@ const RollModal = ({ isOpen, onClose, auth, sessionId, onRefresh, playerData }) 
           username: auth.user.username,
           session_id: sessionId, 
           type, 
-          data: finalPayload 
+          data: finalPayload,
+          activeWeapons: activeWeaponList // Envoi au serveur
         }),
       });
       const data = await res.json();
@@ -58,7 +74,6 @@ const RollModal = ({ isOpen, onClose, auth, sessionId, onRefresh, playerData }) 
     } catch (e) { setRollResult("Err"); }
   };
 
-  // UI Helpers
   const addEffect = () => setEffects([...effects, { id: Date.now(), val: 0, res: null }]);
   const removeEffect = (id) => setEffects(effects.filter(e => e.id !== id));
   const updateEffect = (id, val) => setEffects(effects.map(e => e.id === id ? { ...e, val } : e));
@@ -68,8 +83,6 @@ const RollModal = ({ isOpen, onClose, auth, sessionId, onRefresh, playerData }) 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
       <div className="bg-[#222] border border-gray-600 w-full max-w-2xl rounded-xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
-        
-        {/* TABS */}
         <div className="flex bg-[#151515] border-b border-gray-700 flex-none">
           <button onClick={() => { setActiveTab('stat'); setRollResult(null); }} className={tabClass(activeTab === 'stat')}>Stat</button>
           <button onClick={() => { setActiveTab('sort'); setRollResult(null); }} className={tabClass(activeTab === 'sort')}>Sort</button>
@@ -79,25 +92,43 @@ const RollModal = ({ isOpen, onClose, auth, sessionId, onRefresh, playerData }) 
         <div className="flex flex-1 gap-4 p-4 min-h-0 overflow-hidden flex-col sm:flex-row">
           <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
             
-            {/* TAB STAT */}
             {activeTab === 'stat' && (
               <div className="flex flex-col gap-2">
+                {/* SÉLECTEUR D'ARMES (Uniquement si équipées) */}
+                {(eq.arme1 || eq.arme2) && (
+                    <div className="mb-4 bg-[#151515] p-2 rounded border border-gray-700">
+                        <label className="text-[10px] text-gray-500 uppercase font-bold block mb-2">Bonus Armes Actifs</label>
+                        <div className="flex gap-2">
+                            {eq.arme1 && (
+                                <button onClick={() => toggleWeapon('arme1')} className={`flex-1 py-1 px-2 text-xs rounded border transition-all flex items-center justify-between ${activeWeapons.arme1 ? 'bg-indigo-900/50 border-indigo-500 text-white' : 'bg-black border-gray-700 text-gray-500'}`}>
+                                    <span className="truncate">{eq.arme1.name}</span>
+                                    <span className={`w-2 h-2 rounded-full ${activeWeapons.arme1 ? 'bg-green-500' : 'bg-gray-600'}`}></span>
+                                </button>
+                            )}
+                            {eq.arme2 && (
+                                <button onClick={() => toggleWeapon('arme2')} className={`flex-1 py-1 px-2 text-xs rounded border transition-all flex items-center justify-between ${activeWeapons.arme2 ? 'bg-indigo-900/50 border-indigo-500 text-white' : 'bg-black border-gray-700 text-gray-500'}`}>
+                                    <span className="truncate">{eq.arme2.name}</span>
+                                    <span className={`w-2 h-2 rounded-full ${activeWeapons.arme2 ? 'bg-green-500' : 'bg-gray-600'}`}></span>
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 {['force', 'constitution', 'agilite', 'intelligence', 'perception'].map(stat => (
                   <button key={stat} onClick={() => handleRoll('stat', { stat })} className="flex justify-between items-center p-3 bg-[#1a1a1a] border border-gray-700 rounded-lg hover:bg-indigo-900/20 hover:border-indigo-500/50 transition-all group">
                     <span className="capitalize text-gray-300 font-bold group-hover:text-white">{stat}</span>
                     <span className="text-xs bg-[#111] px-2 py-1 rounded text-gray-500 font-mono">{j[stat]}</span>
                   </button>
                 ))}
-                <p className="text-[10px] text-gray-600 mt-2 text-center uppercase tracking-wide">Force & Agi = Coût Stamina</p>
               </div>
             )}
 
-            {/* TAB SORT */}
             {activeTab === 'sort' && (
               <div className="flex flex-col gap-4 h-full">
                 <div className={`p-3 border rounded-lg text-center transition-colors ${canCastSpell ? 'bg-blue-900/10 border-blue-500/30' : 'bg-red-900/10 border-red-500/30'}`}>
                   <div className="flex justify-between text-xs mb-1 text-gray-400"><span>Base: {j.intelligence}</span><span>- Coût: {totalEffectCost}</span></div>
-                  <p className={`text-lg font-bold ${canCastSpell ? 'text-blue-300' : 'text-red-400'}`}>Intel. Dispo: {currentIntel}</p>
+                  <p className={`text-lg font-bold ${canCastSpell ? 'text-blue-300' : 'text-red-400'}`}>Intel. Dispo (Est.): {currentIntel}</p>
                 </div>
                 <div className="flex-1 overflow-y-auto space-y-2">
                   {effects.map((effect, idx) => (
@@ -118,7 +149,6 @@ const RollModal = ({ isOpen, onClose, auth, sessionId, onRefresh, playerData }) 
               </div>
             )}
 
-            {/* TAB DICE */}
             {activeTab === 'dice' && (
               <div className="flex flex-col gap-4 pt-2">
                 <div><label className="text-xs text-gray-500 uppercase font-bold block mb-1">Min</label><input type="number" value={diceParams.min} onChange={(e) => setDiceParams({...diceParams, min: e.target.value})} className="w-full bg-[#151515] border border-gray-700 rounded p-2 text-white outline-none focus:border-indigo-500" /></div>
@@ -128,7 +158,6 @@ const RollModal = ({ isOpen, onClose, auth, sessionId, onRefresh, playerData }) 
             )}
           </div>
 
-          {/* SIDEBAR RÉSULTATS */}
           <div className="flex-1 flex flex-col gap-3">
             <div className="flex-1 flex flex-col items-center justify-center bg-[#151515] rounded-xl border border-gray-800 relative min-h-[160px]">
               {rollError ? (<div className="text-red-500 font-bold text-xl animate-pulse">{rollError}</div>) : (

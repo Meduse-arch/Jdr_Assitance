@@ -5,14 +5,12 @@ const CreateItemModal = ({ isOpen, onClose, auth, sessionId, onRefresh }) => {
 
   const [isLoading, setIsLoading] = useState(false);
   
-  // Données de base de l'objet
   const [name, setName] = useState("");
   const [type, setType] = useState("consommable");
+  const [slot, setSlot] = useState("corp"); // NOUVEAU : pour l'emplacement d'armure
   const [count, setCount] = useState(1);
   const [description, setDescription] = useState("");
-
-  // Gestion des modificateurs (Liste dynamique)
-  const [modifiers, setModifiers] = useState([]); // [{ stat: 'hp', value: 10 }]
+  const [modifiers, setModifiers] = useState([]);
 
   const itemTypes = [
     { v: 'consommable', l: 'Consommable' },
@@ -23,70 +21,51 @@ const CreateItemModal = ({ isOpen, onClose, auth, sessionId, onRefresh }) => {
     { v: 'autres', l: 'Autre' }
   ];
 
-  const statsOptions = [
-    { v: 'hp', l: 'PV (Soin/Dégât)' },
-    { v: 'mana', l: 'Mana' },
-    { v: 'stam', l: 'Stamina' },
-    { v: 'force', l: 'Force' },
-    { v: 'constitution', l: 'Constitution' },
-    { v: 'agilite', l: 'Agilité' },
-    { v: 'intelligence', l: 'Intelligence' },
-    { v: 'perception', l: 'Perception' }
+  // Liste des emplacements possibles selon ta demande
+  const armorSlots = [
+    { v: 'tete', l: 'Tête' },
+    { v: 'corp', l: 'Corps' },
+    { v: 'dos', l: 'Dos' },
+    { v: 'pantalon', l: 'Pantalon' },
+    { v: 'pied', l: 'Pied' }
   ];
 
-  // Ajouter une ligne de modificateur
-  const addModifier = () => {
-    setModifiers([...modifiers, { stat: 'hp', value: 10 }]);
-  };
+  const statsOptions = [
+    { v: 'hp', l: 'PV' }, { v: 'mana', l: 'Mana' }, { v: 'stam', l: 'Stamina' },
+    { v: 'force', l: 'Force' }, { v: 'constitution', l: 'Const.' },
+    { v: 'agilite', l: 'Agilité' }, { v: 'intelligence', l: 'Intel.' }, { v: 'perception', l: 'Perc.' }
+  ];
 
-  // Mettre à jour une ligne
-  const updateModifier = (index, field, val) => {
-    const newMods = [...modifiers];
-    newMods[index][field] = val;
-    setModifiers(newMods);
-  };
-
-  // Supprimer une ligne
-  const removeModifier = (index) => {
-    setModifiers(modifiers.filter((_, i) => i !== index));
-  };
+  const addModifier = () => setModifiers([...modifiers, { stat: 'hp', value: 10 }]);
+  const updateModifier = (index, field, val) => { const n = [...modifiers]; n[index][field] = val; setModifiers(n); };
+  const removeModifier = (index) => setModifiers(modifiers.filter((_, i) => i !== index));
 
   const handleSubmit = async () => {
     if (!name) return alert("Il faut un nom !");
     setIsLoading(true);
 
-    // Transformation du tableau modifiers en objet { hp: 10, force: 3 } pour le serveur
     const modifiersObj = {};
-    modifiers.forEach(m => {
-        modifiersObj[m.stat] = parseInt(m.value) || 0;
-    });
+    modifiers.forEach(m => { modifiersObj[m.stat] = parseInt(m.value) || 0; });
 
     const newItem = {
-      name,
-      type,
+      name, type,
       count: parseInt(count) || 1,
       description,
-      modifiers: modifiersObj
+      modifiers: modifiersObj,
+      // On n'ajoute le slot que si c'est une armure
+      slot: type === 'armure' ? slot : null 
     };
 
     try {
       const res = await fetch("/api/player/inventory/add", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          user_id: auth.user.id, 
-          session_id: sessionId, 
-          item: newItem 
-        }),
+        body: JSON.stringify({ user_id: auth.user.id, session_id: sessionId, item: newItem }),
       });
       const data = await res.json();
       if (data.success) {
-        onRefresh(); // Rafraichir l'app
-        onClose();   // Fermer la modale
-        // Reset form
+        onRefresh(); onClose();
         setName(""); setDescription(""); setModifiers([]);
-      } else {
-        alert("Erreur: " + data.error);
-      }
+      } else { alert("Erreur: " + data.error); }
     } catch (e) { alert("Erreur serveur"); } 
     finally { setIsLoading(false); }
   };
@@ -94,19 +73,16 @@ const CreateItemModal = ({ isOpen, onClose, auth, sessionId, onRefresh }) => {
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
       <div className="bg-[#222] border border-gray-600 w-full max-w-lg rounded-xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-        
         <div className="p-4 bg-[#1a1a1a] border-b border-gray-700 flex justify-between items-center">
             <h3 className="text-white font-bold">🛠️ Créer un Objet</h3>
             <button onClick={onClose} className="text-gray-500 hover:text-white">✕</button>
         </div>
-
         <div className="p-6 overflow-y-auto custom-scrollbar space-y-4">
             
-            {/* Nom & Type */}
             <div className="flex gap-2">
                 <div className="flex-1">
                     <label className="text-[10px] text-gray-500 uppercase font-bold">Nom</label>
-                    <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full bg-[#111] border border-gray-600 rounded p-2 text-white" placeholder="Ex: Épée longue" />
+                    <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full bg-[#111] border border-gray-600 rounded p-2 text-white" placeholder="Ex: Casque de Fer" />
                 </div>
                 <div className="w-1/3">
                     <label className="text-[10px] text-gray-500 uppercase font-bold">Type</label>
@@ -116,11 +92,20 @@ const CreateItemModal = ({ isOpen, onClose, auth, sessionId, onRefresh }) => {
                 </div>
             </div>
 
-            {/* Description & Quantité */}
+            {/* SÉLECTEUR D'EMPLACEMENT (Visible seulement pour Armure) */}
+            {type === 'armure' && (
+                <div className="bg-blue-900/20 border border-blue-500/30 p-2 rounded">
+                    <label className="text-[10px] text-blue-300 uppercase font-bold block mb-1">Emplacement</label>
+                    <select value={slot} onChange={e => setSlot(e.target.value)} className="w-full bg-[#111] border border-blue-500/50 rounded p-2 text-white outline-none">
+                        {armorSlots.map(s => <option key={s.v} value={s.v}>{s.l}</option>)}
+                    </select>
+                </div>
+            )}
+
             <div className="flex gap-2">
                 <div className="flex-1">
                     <label className="text-[10px] text-gray-500 uppercase font-bold">Description</label>
-                    <input type="text" value={description} onChange={e => setDescription(e.target.value)} className="w-full bg-[#111] border border-gray-600 rounded p-2 text-white text-sm" placeholder="Effet, lore..." />
+                    <input type="text" value={description} onChange={e => setDescription(e.target.value)} className="w-full bg-[#111] border border-gray-600 rounded p-2 text-white text-sm" placeholder="Effet..." />
                 </div>
                 <div className="w-20">
                     <label className="text-[10px] text-gray-500 uppercase font-bold">Qté</label>
@@ -128,22 +113,18 @@ const CreateItemModal = ({ isOpen, onClose, auth, sessionId, onRefresh }) => {
                 </div>
             </div>
 
-            {/* MODIFICATEURS */}
             <div className="bg-[#151515] p-3 rounded border border-gray-700">
                 <div className="flex justify-between items-center mb-2">
-                    <label className="text-xs text-indigo-400 font-bold uppercase">⚡ Modificateurs / Bonus</label>
+                    <label className="text-xs text-indigo-400 font-bold uppercase">⚡ Bonus</label>
                     <button onClick={addModifier} className="text-[10px] bg-indigo-900 text-indigo-200 px-2 py-1 rounded hover:bg-indigo-700">+ Ajouter</button>
                 </div>
-                
-                {modifiers.length === 0 && <p className="text-gray-600 text-xs italic text-center py-2">Aucun effet spécial.</p>}
-
                 <div className="space-y-2">
                     {modifiers.map((mod, idx) => (
                         <div key={idx} className="flex gap-2 items-center">
                             <select value={mod.stat} onChange={e => updateModifier(idx, 'stat', e.target.value)} className="flex-1 bg-black border border-gray-600 rounded p-1 text-white text-xs">
                                 {statsOptions.map(s => <option key={s.v} value={s.v}>{s.l}</option>)}
                             </select>
-                            <input type="number" value={mod.value} onChange={e => updateModifier(idx, 'value', e.target.value)} className="w-16 bg-black border border-gray-600 rounded p-1 text-white text-xs text-center" placeholder="+1" />
+                            <input type="number" value={mod.value} onChange={e => updateModifier(idx, 'value', e.target.value)} className="w-16 bg-black border border-gray-600 rounded p-1 text-white text-xs text-center" />
                             <button onClick={() => removeModifier(idx)} className="text-red-500 hover:text-red-400 px-1 font-bold">×</button>
                         </div>
                     ))}
@@ -153,7 +134,6 @@ const CreateItemModal = ({ isOpen, onClose, auth, sessionId, onRefresh }) => {
             <button onClick={handleSubmit} disabled={isLoading} className="w-full py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg shadow-lg transition-all disabled:opacity-50">
                 {isLoading ? "Création..." : "✨ Créer l'objet"}
             </button>
-
         </div>
       </div>
     </div>

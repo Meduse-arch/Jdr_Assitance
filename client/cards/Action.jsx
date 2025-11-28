@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import RollModal from './modals/RollModal';
 import PersonnageModal from './modals/PersonnageModal';
 import MoneyModal from './modals/MoneyModal';
-import CreateItemModal from './modals/CreateItemModal'; // <--- IMPORT
+import ManageItemModal from './modals/ManageItemModal'; // <--- NOUVEAU IMPORT
 
 const Action = ({ sessionName, icon, playerData, auth, sessionId, onRefresh }) => {
   const j = playerData.joueur;
@@ -11,11 +11,12 @@ const Action = ({ sessionName, icon, playerData, auth, sessionId, onRefresh }) =
   const [isRollOpen, setIsRollOpen] = useState(false);
   const [isPersonnageOpen, setIsPersonnageOpen] = useState(false);
   const [isMoneyOpen, setIsMoneyOpen] = useState(false);
-  const [isCreateItemOpen, setIsCreateItemOpen] = useState(false); // <--- ETAT
+  const [isManageItemOpen, setIsManageItemOpen] = useState(false); // <--- ETAT RENOMMÉ
 
   return (
     <>
       <div className="flex flex-col items-center justify-center py-10 animate-fade-in relative w-full">
+        {/* ... (HUD Argent et Stats inchangés) ... */}
         
         {/* HUD ARGENT */}
         <div className="absolute top-0 left-0 flex flex-row items-center gap-3 bg-[#151515] border border-gray-700 rounded-lg px-4 py-2 text-xs font-mono shadow-lg z-10">
@@ -48,48 +49,25 @@ const Action = ({ sessionName, icon, playerData, auth, sessionId, onRefresh }) =
              <button onClick={() => setIsMoneyOpen(true)} className="px-4 py-3 bg-yellow-900/40 border border-yellow-500/40 hover:bg-yellow-800/60 text-yellow-100 rounded-xl font-bold transition-all flex items-center justify-center gap-2 shadow-lg"><span>💰</span> Argent</button>
           </div>
 
-          {/* BOUTON CRÉER OBJET */}
-          <button onClick={() => setIsCreateItemOpen(true)} className="px-6 py-3 bg-slate-700/50 hover:bg-slate-600 border border-slate-600 text-gray-200 rounded-xl font-bold shadow-lg transition-all flex items-center justify-center gap-2 mt-2">
-            <span>🛠️</span> Créer un Objet
+          {/* BOUTON RENOMMÉ */}
+          <button onClick={() => setIsManageItemOpen(true)} className="px-6 py-3 bg-slate-700/50 hover:bg-slate-600 border border-slate-600 text-gray-200 rounded-xl font-bold shadow-lg transition-all flex items-center justify-center gap-2 mt-2">
+            <span>📦</span> Gestion Objets
           </button>
         </div>
       </div>
 
-      {/* --- MODALES --- */}
-      
-      <RollModal 
-        isOpen={isRollOpen} 
-        onClose={() => setIsRollOpen(false)} 
+      <RollModal isOpen={isRollOpen} onClose={() => setIsRollOpen(false)} auth={auth} sessionId={sessionId} onRefresh={onRefresh} playerData={playerData} />
+      <PersonnageModal isOpen={isPersonnageOpen} onClose={() => setIsPersonnageOpen(false)} auth={auth} sessionId={sessionId} onRefresh={onRefresh} />
+      <MoneyModal isOpen={isMoneyOpen} onClose={() => setIsMoneyOpen(false)} auth={auth} sessionId={sessionId} onRefresh={onRefresh} playerData={playerData} />
+
+      {/* NOUVELLE MODALE */}
+      <ManageItemModal 
+        isOpen={isManageItemOpen} 
+        onClose={() => setIsManageItemOpen(false)} 
         auth={auth} 
         sessionId={sessionId} 
         onRefresh={onRefresh} 
-        playerData={playerData} 
-      />
-
-      <PersonnageModal
-        isOpen={isPersonnageOpen}
-        onClose={() => setIsPersonnageOpen(false)}
-        auth={auth}
-        sessionId={sessionId}
-        onRefresh={onRefresh}
-      />
-
-      <MoneyModal 
-        isOpen={isMoneyOpen} 
-        onClose={() => setIsMoneyOpen(false)} 
-        auth={auth} 
-        sessionId={sessionId} 
-        onRefresh={onRefresh} 
-        playerData={playerData} 
-      />
-
-      {/* MODALE CRÉATION OBJET */}
-      <CreateItemModal 
-        isOpen={isCreateItemOpen} 
-        onClose={() => setIsCreateItemOpen(false)} 
-        auth={auth} 
-        sessionId={sessionId} 
-        onRefresh={onRefresh} 
+        inventory={playerData?.inventory || []} // On passe l'inventaire pour le select
       />
 
     </>
