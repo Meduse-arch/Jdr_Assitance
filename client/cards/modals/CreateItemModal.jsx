@@ -7,7 +7,7 @@ const CreateItemModal = ({ isOpen, onClose, auth, sessionId, onRefresh }) => {
   
   const [name, setName] = useState("");
   const [type, setType] = useState("consommable");
-  const [slot, setSlot] = useState("corp"); // NOUVEAU : pour l'emplacement d'armure
+  const [slot, setSlot] = useState("corp");
   const [count, setCount] = useState(1);
   const [description, setDescription] = useState("");
   const [modifiers, setModifiers] = useState([]);
@@ -21,7 +21,6 @@ const CreateItemModal = ({ isOpen, onClose, auth, sessionId, onRefresh }) => {
     { v: 'autres', l: 'Autre' }
   ];
 
-  // Liste des emplacements possibles selon ta demande
   const armorSlots = [
     { v: 'tete', l: 'Tête' },
     { v: 'corp', l: 'Corps' },
@@ -33,7 +32,8 @@ const CreateItemModal = ({ isOpen, onClose, auth, sessionId, onRefresh }) => {
   const statsOptions = [
     { v: 'hp', l: 'PV' }, { v: 'mana', l: 'Mana' }, { v: 'stam', l: 'Stamina' },
     { v: 'force', l: 'Force' }, { v: 'constitution', l: 'Const.' },
-    { v: 'agilite', l: 'Agilité' }, { v: 'intelligence', l: 'Intel.' }, { v: 'perception', l: 'Perc.' }
+    { v: 'agilite', l: 'Agilité' }, { v: 'intelligence', l: 'Intel.' }, { v: 'perception', l: 'Perc.' },
+    { v: 'modEffect', l: 'Sort' } // <--- RENOMMÉ ICI
   ];
 
   const addModifier = () => setModifiers([...modifiers, { stat: 'hp', value: 10 }]);
@@ -52,7 +52,6 @@ const CreateItemModal = ({ isOpen, onClose, auth, sessionId, onRefresh }) => {
       count: parseInt(count) || 1,
       description,
       modifiers: modifiersObj,
-      // On n'ajoute le slot que si c'est une armure
       slot: type === 'armure' ? slot : null 
     };
 
@@ -82,7 +81,7 @@ const CreateItemModal = ({ isOpen, onClose, auth, sessionId, onRefresh }) => {
             <div className="flex gap-2">
                 <div className="flex-1">
                     <label className="text-[10px] text-gray-500 uppercase font-bold">Nom</label>
-                    <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full bg-[#111] border border-gray-600 rounded p-2 text-white" placeholder="Ex: Casque de Fer" />
+                    <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full bg-[#111] border border-gray-600 rounded p-2 text-white" placeholder="Ex: Bâton de Feu" />
                 </div>
                 <div className="w-1/3">
                     <label className="text-[10px] text-gray-500 uppercase font-bold">Type</label>
@@ -92,7 +91,6 @@ const CreateItemModal = ({ isOpen, onClose, auth, sessionId, onRefresh }) => {
                 </div>
             </div>
 
-            {/* SÉLECTEUR D'EMPLACEMENT (Visible seulement pour Armure) */}
             {type === 'armure' && (
                 <div className="bg-blue-900/20 border border-blue-500/30 p-2 rounded">
                     <label className="text-[10px] text-blue-300 uppercase font-bold block mb-1">Emplacement</label>
@@ -115,7 +113,7 @@ const CreateItemModal = ({ isOpen, onClose, auth, sessionId, onRefresh }) => {
 
             <div className="bg-[#151515] p-3 rounded border border-gray-700">
                 <div className="flex justify-between items-center mb-2">
-                    <label className="text-xs text-indigo-400 font-bold uppercase">⚡ Bonus</label>
+                    <label className="text-xs text-indigo-400 font-bold uppercase">⚡ Bonus / Stats</label>
                     <button onClick={addModifier} className="text-[10px] bg-indigo-900 text-indigo-200 px-2 py-1 rounded hover:bg-indigo-700">+ Ajouter</button>
                 </div>
                 <div className="space-y-2">
@@ -124,7 +122,7 @@ const CreateItemModal = ({ isOpen, onClose, auth, sessionId, onRefresh }) => {
                             <select value={mod.stat} onChange={e => updateModifier(idx, 'stat', e.target.value)} className="flex-1 bg-black border border-gray-600 rounded p-1 text-white text-xs">
                                 {statsOptions.map(s => <option key={s.v} value={s.v}>{s.l}</option>)}
                             </select>
-                            <input type="number" value={mod.value} onChange={e => updateModifier(idx, 'value', e.target.value)} className="w-16 bg-black border border-gray-600 rounded p-1 text-white text-xs text-center" />
+                            <input type="number" value={mod.value} onChange={e => updateModifier(idx, 'value', e.target.value)} className="w-16 bg-black border border-gray-600 rounded p-1 text-white text-xs text-center" placeholder="+/-" />
                             <button onClick={() => removeModifier(idx)} className="text-red-500 hover:text-red-400 px-1 font-bold">×</button>
                         </div>
                     ))}

@@ -42,18 +42,17 @@ const Fiche = ({ playerData, auth, sessionId, onRefresh }) => {
     finally { setLoading(false); }
   };
 
+  // -- STAT BLOCK : Affiche uniquement la STAT PURE (Base) --
   const StatBlock = ({ label, statKey, side }) => {
     const base = j[statKey] || 0;
-    const bonus = totalBonuses[statKey] || 0;
-    const total = base + bonus;
+    // On ignore les bonus ici selon la demande
     
     return (
-        <div className={`flex items-center gap-2 p-2 bg-[#1a1a1a] border border-gray-700 rounded-lg ${side === 'left' ? 'flex-row' : 'flex-row-reverse text-right'}`}>
+        <div className={`flex items-center gap-2 p-2 bg-[#1a1a1a] border border-gray-700 rounded-lg w-full ${side === 'left' ? 'flex-row' : 'flex-row-reverse text-right'}`}>
             <div className="flex-1">
                 <span className="block text-[10px] text-gray-500 uppercase font-bold">{label}</span>
-                <span className="text-xl font-bold text-white">
-                    {total} 
-                    {bonus > 0 && <span className="text-xs text-green-400 ml-1">+{bonus}</span>}
+                <span className="text-2xl font-bold text-white">
+                    {base} 
                 </span>
             </div>
         </div>
@@ -138,23 +137,32 @@ const Fiche = ({ playerData, auth, sessionId, onRefresh }) => {
 
   return (
     <div className="animate-fade-in relative pb-10">
-      <div className="flex justify-between items-center mb-8 gap-4">
-        <div className="flex flex-col gap-2 w-1/3">
+      
+      {/* SECTION DU HAUT : STATS PURES + AVATAR (Sans Polygone) */}
+      <div className="flex justify-between items-center mb-8 gap-1">
+        
+        {/* Colonne Gauche (Force / Const) */}
+        <div className="flex flex-col justify-center gap-6 w-1/3 z-10">
             <StatBlock label="Force" statKey="force" side="left" />
             <StatBlock label="Const" statKey="constitution" side="left" />
         </div>
-        <div className="w-1/3 flex justify-center">
-            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shadow-2xl border-4 border-[#1a1a1a]">
-                <span className="text-2xl">👤</span>
+        
+        {/* Centre Avatar Seulement */}
+        <div className="w-1/3 flex justify-center items-center relative h-48">
+            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shadow-xl border-2 border-[#1a1a1a] z-10 relative">
+                <span className="text-3xl">👤</span>
             </div>
         </div>
-        <div className="flex flex-col gap-2 w-1/3">
+
+        {/* Colonne Droite (Agi / Intel / Perc) */}
+        <div className="flex flex-col gap-4 w-1/3 z-10">
             <StatBlock label="Agilité" statKey="agilite" side="right" />
             <StatBlock label="Intel" statKey="intelligence" side="right" />
             <StatBlock label="Perc" statKey="perception" side="right" />
         </div>
       </div>
       
+      {/* Barres de Ressources */}
       <div className="space-y-2 mb-8">
         {[{ l: 'HP', v: j.hp, m: j.hpMax, c: 'bg-red-500' }, { l: 'Mana', v: j.mana, m: j.manaMax, c: 'bg-blue-500' }, { l: 'Stam', v: j.stam, m: j.stamMax, c: 'bg-green-500' }].map(r => (
           <div key={r.l} className="bg-[#151515] rounded h-5 relative overflow-hidden border border-gray-800">

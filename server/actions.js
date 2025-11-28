@@ -42,9 +42,9 @@ export async function checkAdmin(accessToken, guildId) {
   } catch (e) { return false; }
 }
 
-// --- CALCUL STATS & RESSOURCES (CORRIGÉ) ---
+// --- CALCUL STATS & RESSOURCES ---
 export function calculateStats(baseStats, equipment = {}) {
-  // 1. Stats de base (valeurs brutes de la fiche)
+  // 1. Stats de base
   const base = {
     force: Number(baseStats.force) || 0,
     constitution: Number(baseStats.constitution) || 0,
@@ -53,44 +53,38 @@ export function calculateStats(baseStats, equipment = {}) {
     perception: Number(baseStats.perception) || 0
   };
 
-  // 2. Calcul des Bonus d'équipement (isolés)
+  // 2. Calcul des Bonus d'équipement
   let bonuses = { force: 0, constitution: 0, agilite: 0, intelligence: 0, perception: 0 };
-  
+  let resourceBonuses = { hp: 0, mana: 0, stam: 0 };
+
   Object.values(equipment).forEach(item => {
     if (item && item.modifiers) {
         ['force', 'constitution', 'agilite', 'intelligence', 'perception'].forEach(s => {
             if (item.modifiers[s]) bonuses[s] += Number(item.modifiers[s]);
         });
+        if (item.modifiers.hp) resourceBonuses.hp += Number(item.modifiers.hp);
+        if (item.modifiers.mana) resourceBonuses.mana += Number(item.modifiers.mana);
+        if (item.modifiers.stam) resourceBonuses.stam += Number(item.modifiers.stam);
     }
   });
 
-  // 3. Calcul des Ressources de BASE (UNIQUEMENT sur les stats de base)
-  // CORRECTION : Les bonus de stats (+200 Force) n'augmentent PAS les jauges Max ici.
+  // 3. Calcul des Ressources de BASE
   let hpMax = Math.max(0, base.constitution * 4);
   let manaMax = Math.max(0, base.intelligence * 20);
   let stamMax = Math.max(0, (base.force + base.agilite) * 10);
 
-  // 4. Ajout des Bonus de Ressources DIRECTS (ex: un objet qui donne explicitement "HP +50")
-  Object.values(equipment).forEach(item => {
-    if (item && item.modifiers) {
-        if (item.modifiers.hp) hpMax += Number(item.modifiers.hp);
-        if (item.modifiers.mana) manaMax += Number(item.modifiers.mana);
-        if (item.modifiers.stam) stamMax += Number(item.modifiers.stam);
-    }
-  });
+  // 4. Ajout des Bonus de Ressources
+  hpMax += resourceBonuses.hp;
+  manaMax += resourceBonuses.mana;
+  stamMax += resourceBonuses.stam;
 
   return {
-    // Totaux (pour affichage fiche)
     force: base.force + bonuses.force,
     constitution: base.constitution + bonuses.constitution,
     agilite: base.agilite + bonuses.agilite,
     intelligence: base.intelligence + bonuses.intelligence,
     perception: base.perception + bonuses.perception,
-    
-    // On exporte les bonus isolés pour les calculs de jet
     bonuses,
-    
-    // Maxima calculés
     hpMax, manaMax, stamMax
   };
 }
@@ -143,22 +137,11 @@ export function processStatMod(player, statName, action, value) {
   const eq = player.equipment || {};
   const val = Number(value);
   if (!val || val <= 0) return { success: false, error: "Valeur invalide" };
-  
-  // On modifie la stat de base
   if (action === 'add') j[statName] = (j[statName] || 0) + val;
   else if (action === 'remove') j[statName] = Math.max(0, (j[statName] || 0) - val);
-
-  // Recalcul des dérivés
   const derived = calculateStats(j, eq);
-  j.hpMax = derived.hpMax;
-  j.manaMax = derived.manaMax;
-  j.stamMax = derived.stamMax;
-
-  // On clamp les valeurs actuelles
-  j.hp = Math.min(j.hp, j.hpMax);
-  j.mana = Math.min(j.mana, j.manaMax);
-  j.stam = Math.min(j.stam, j.stamMax);
-
+  j.hpMax = derived.hpMax; j.manaMax = derived.manaMax; j.stamMax = derived.stamMax;
+  j.hp = Math.min(j.hp, j.hpMax); j.mana = Math.min(j.mana, j.manaMax); j.stam = Math.min(j.stam, j.stamMax);
   return { success: true };
 }
 
@@ -166,24 +149,13 @@ export function processResourceMod(player, target, action, value) {
   const j = player.joueur;
   const val = Number(value);
   if (!val || val <= 0) return { success: false, error: "Valeur invalide" };
-  
   let current, max;
   if (target === 'hp') { current = j.hp; max = j.hpMax; }
   else if (target === 'mana') { current = j.mana; max = j.manaMax; }
   else if (target === 'stam') { current = j.stam; max = j.stamMax; }
   else return { success: false, error: "Cible invalide" };
-
-  if (action === 'add') {
-    const newVal = Math.min(current + val, max);
-    if (target === 'hp') j.hp = newVal;
-    if (target === 'mana') j.mana = newVal;
-    if (target === 'stam') j.stam = newVal;
-  } else if (action === 'remove') {
-    const newVal = Math.max(current - val, 0);
-    if (target === 'hp') j.hp = newVal;
-    if (target === 'mana') j.mana = newVal;
-    if (target === 'stam') j.stam = newVal;
-  }
+  if (action === 'add') { const newVal = Math.min(current + val, max); if (target === 'hp') j.hp = newVal; if (target === 'mana') j.mana = newVal; if (target === 'stam') j.stam = newVal; }
+  else if (action === 'remove') { const newVal = Math.max(current - val, 0); if (target === 'hp') j.hp = newVal; if (target === 'mana') j.mana = newVal; if (target === 'stam') j.stam = newVal; }
   return { success: true };
 }
 
@@ -191,67 +163,55 @@ export function processRepos(player, type, target) {
   const j = player.joueur;
   if (type === 'long') { j.hp = j.hpMax; j.mana = j.manaMax; j.stam = j.stamMax; }
   else if (type === 'court') { j.mana = j.manaMax; j.stam = j.stamMax; }
-  else if (type === 'simple') {
-    if (target === 'mana') j.mana = j.manaMax;
-    else if (target === 'stam') j.stam = j.stamMax;
-  }
+  else if (type === 'simple') { if (target === 'mana') j.mana = j.manaMax; else if (target === 'stam') j.stam = j.stamMax; }
   return { success: true };
 }
 
-// --- PROCESS ROLL (CORRIGÉ) ---
+// --- PROCESS ROLL ---
 export function processRoll(player, type, data, activeWeapons = []) {
   const j = player.joueur;
   const eq = player.equipment || {};
   const advType = data.adv || 'n'; 
   const mod = Number(data.mod) || 0;
 
-  // Filtrage de l'équipement actif pour le calcul des bonus
   const activeEquipment = { ...eq };
   if (!activeWeapons.includes('arme1')) delete activeEquipment.arme1;
   if (!activeWeapons.includes('arme2')) delete activeEquipment.arme2;
 
-  // Récupération des stats (Base + Bonus séparés)
+  // Calcul des stats avec bonus d'équipement
   const statsResult = calculateStats(j, activeEquipment);
 
   if (type === 'stat') {
     const statName = data.stat; 
-    
-    // 1. On lance le dé sur la stat de BASE
-    // C'est ça qui garantit que le coût en Stamina reste raisonnable
     const baseStatValue = Number(j[statName]) || 0;
-    
-    // 2. On récupère le bonus d'équipement à part
     const equipBonus = statsResult.bonuses[statName] || 0;
 
     if (baseStatValue === undefined) return { success: false, error: "Stat inconnue" };
     if ((statName === 'force' || statName === 'agilite') && j.stam <= 0) return { success: false, error: "NO_STAM" };
 
-    // ROLL (Sur la base)
     const rollData = rollWithAdvantage(baseStatValue, advType);
-    
-    // RÉSULTAT FINAL = Jet (Base) + Modif Manuel + Bonus Équipement
     const result = rollData.chosen + mod + equipBonus;
     
     let cost = 0;
     let costType = null;
     if (statName === 'force' || statName === 'agilite') {
-      // Le coût est basé sur le jet de dé, donc sur la stat de base
       cost = rollData.chosen; 
       costType = 'Stamina';
       j.stam = Math.max(0, j.stam - cost);
     }
 
-    console.log(`[ROLL: STAT] ${statName.toUpperCase()} (Base ${baseStatValue}) -> [${rollData.chosen}] + ${mod} + ${equipBonus} (Equip) = ${result}`);
+    console.log(`[STAT] ${data.username || 'Joueur'}: ${statName.toUpperCase()} (Base ${baseStatValue}) -> [${rollData.chosen}] + ${mod} + ${equipBonus} (Equip) = ${result}`);
     return { success: true, result, raw: rollData.chosen, list: rollData.list, cost, costType, stat: statName, mod, equipBonus };
   }
 
   if (type === 'sort') {
     if (j.mana <= 0) return { success: false, error: "NO_MANA" };
 
-    const effects = data.effects || [];
-    const modEffect = Number(data.modEffect) || 0;
+    const effects = data.effects || []; // Tableau d'objets {val, mod}
+    const modEffect = Number(data.modEffect) || 0; // Modificateur Global Effets
     
-    // Bonus effet sort de l'équipement
+    // Calcul du Bonus SORT (ex: Bâton +5 Dégâts magiques)
+    // Cela correspond à la stat 'modEffect' sur les objets
     let equipSpellBonus = 0;
     Object.values(activeEquipment).forEach(item => {
         if (item && item.modifiers && item.modifiers.modEffect) {
@@ -259,29 +219,50 @@ export function processRoll(player, type, data, activeWeapons = []) {
         }
     });
 
-    const totalEffectCost = effects.reduce((a, b) => a + b, 0);
+    // Coût basé sur la somme des dés (Puissance brute)
+    const totalEffectCost = effects.reduce((sum, eff) => sum + (Number(eff.val) || 0), 0);
     
-    // Intelligence de base pour le jet (Pour garder un coût Mana raisonnable)
+    // 1. LOGIQUE STATS APPLIQUÉE AU SORT
+    // On utilise l'Intelligence de BASE pour déterminer le seuil du jet (et donc le coût Max)
     const baseIntel = Number(j.intelligence) || 0;
+    const equipIntelBonus = statsResult.bonuses.intelligence || 0;
+
     const intelDispo = baseIntel - totalEffectCost;
 
-    if (intelDispo <= 0) return { success: false, error: `Intelligence insuffisante` };
+    if (intelDispo <= 0) return { success: false, error: `Intelligence insuffisante (${intelDispo})` };
 
+    // 2. JET DE RÉUSSITE (Base du sort)
+    // Roll sous l'intelligence de base disponible
     const mainRoll = rollWithAdvantage(intelDispo, advType);
     
-    // Résultat = Jet + Modif + Bonus Effet Sort
-    // (Note : On pourrait ajouter statsResult.bonuses.intelligence ici si l'intel de l'équipement doit aussi booster le sort)
-    const mainResult = mainRoll.chosen + mod + equipSpellBonus; 
+    // 3. RÉSULTAT FINAL = Jet + Modif Manuel + Bonus Equipement INTELLIGENCE
+    // (Le Bonus "Sort" ne touche que les effets, pas la réussite)
+    const mainResult = mainRoll.chosen + mod + equipIntelBonus; 
 
-    const effectResults = effects.map(val => {
+    // 4. CALCUL DES EFFETS
+    // Chaque effet = Jet Dé + Modif Local + Modif Global + Bonus Equipement SORT
+    const effectResults = effects.map(eff => {
+      const val = Number(eff.val) || 0;
+      const localMod = Number(eff.mod) || 0;
+      
       const r = rollWithAdvantage(val, advType);
-      return r.chosen + modEffect + equipSpellBonus;
+      return r.chosen + localMod + modEffect + equipSpellBonus;
     });
 
+    // Coût en Mana = Résultat du dé de réussite
     const cost = mainRoll.chosen;
     j.mana = Math.max(0, j.mana - cost);
 
-    console.log(`[ROLL: SORT] Result: ${mainResult} (Jet ${mainRoll.chosen} + Mod ${mod} + Bonus ${equipSpellBonus})`);
+    // LOG DÉTAILLÉ POUR LA CONSOLE
+    const logDetails = effects.map((e, i) => `Effet #${i+1}(d${e.val}): ${effectResults[i]}`).join(', ');
+    const logStr = `[SORT] ${data.username || 'Joueur'}
+> 🎲 Réussite : [${mainRoll.chosen}/${intelDispo}] ${mod!==0 ? (mod>0 ? `+${mod}` : mod) : ''} ${equipIntelBonus!==0 ? `+${equipIntelBonus}(Equip)` : ''} = **${mainResult}**
+> 💥 Effets : ${logDetails} 
+  (Détail: Base + Local + Glob(${modEffect}) + Equip(${equipSpellBonus}))
+> Coût Mana : -${cost}`;
+    
+    console.log(logStr);
+
     return { success: true, result: mainResult, effectResults: effectResults, cost, costType: 'Mana', stat: 'Sort', mod };
   }
 
@@ -307,7 +288,7 @@ export function processRoll(player, type, data, activeWeapons = []) {
       const ignored = s1 === chosen ? s2 : s1;
       resultObj = { result: chosen.sum + mod, details: chosen.rolls, mod, ignoredDetails: ignored.rolls, ignoredSum: ignored.sum };
     }
-    console.log(`[ROLL: DICE] Total: ${resultObj.result}`);
+    console.log(`[DICE] ${data.username || 'Joueur'}: ${count}d[${min}-${max}] -> [${resultObj.details.join(', ')}] ${mod!==0 ? `+ ${mod}` : ''} = ${resultObj.result}`);
     return { success: true, ...resultObj };
   }
 
