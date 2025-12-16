@@ -100,7 +100,7 @@ const Inventaire = ({ playerData, auth, sessionId, onRefresh }) => {
   // --- POPUP ---
   const ItemDetailPopup = () => {
     if (!selectedItem) return null;
-    const isEquipable = ['arme', 'armure', 'bijoux'].includes(selectedItem.type);
+    const isEquipable = ['arme', 'armure', 'bijoux', 'autres'].includes(selectedItem.type);
     
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={() => setSelectedItem(null)}>
@@ -113,7 +113,12 @@ const Inventaire = ({ playerData, auth, sessionId, onRefresh }) => {
                 <div className="p-5 space-y-4">
                     {selectedItem.description && <p className="text-sm text-gray-400 italic bg-black/30 p-3 rounded border border-gray-800">"{selectedItem.description}"</p>}
                     {selectedItem.modifiers && Object.keys(selectedItem.modifiers).length > 0 && (
-                        <div className="grid grid-cols-2 gap-2">{Object.entries(selectedItem.modifiers).map(([key, val]) => (<div key={key} className="bg-[#111] border border-gray-700 px-2 py-1 rounded flex justify-between"><span className="text-xs text-gray-400 capitalize">{key}</span><span className="text-xs font-bold text-green-400">+{val}</span></div>))}</div>
+                        <div className="grid grid-cols-2 gap-2">{Object.entries(selectedItem.modifiers).map(([key, val]) => (
+                          <div key={key} className="bg-[#111] border border-gray-700 px-2 py-1 rounded flex justify-between">
+                            <span className="text-xs text-gray-400 capitalize">{key === 'modEffect' ? 'Sort' : key}</span>
+                            <span className="text-xs font-bold text-green-400">+{val}</span>
+                          </div>
+                        ))}</div>
                     )}
                 </div>
                 <div className="p-4 bg-[#111] border-t border-gray-700">
@@ -125,6 +130,27 @@ const Inventaire = ({ playerData, auth, sessionId, onRefresh }) => {
                                 <div className="flex gap-2">
                                     <button onClick={() => handleItemAction('equip', 'arme1')} className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-xs">MAIN DROITE</button>
                                     <button onClick={() => handleItemAction('equip', 'arme2')} className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-xs">MAIN GAUCHE</button>
+                                </div>
+                            ) : selectedItem.type === 'bijoux' ? (
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button onClick={() => handleItemAction('equip', 'bijou1')} disabled={useLoading} className="py-3 bg-purple-900/50 border border-purple-500 hover:bg-purple-600 text-white font-bold rounded-lg text-xs">SLOT 1</button>
+                                    <button onClick={() => handleItemAction('equip', 'bijou2')} disabled={useLoading} className="py-3 bg-purple-900/50 border border-purple-500 hover:bg-purple-600 text-white font-bold rounded-lg text-xs">SLOT 2</button>
+                                    <button onClick={() => handleItemAction('equip', 'bijou3')} disabled={useLoading} className="py-3 bg-purple-900/50 border border-purple-500 hover:bg-purple-600 text-white font-bold rounded-lg text-xs">SLOT 3</button>
+                                    <button onClick={() => handleItemAction('equip', 'bijou4')} disabled={useLoading} className="py-3 bg-purple-900/50 border border-purple-500 hover:bg-purple-600 text-white font-bold rounded-lg text-xs">SLOT 4</button>
+                                </div>
+                            ) : selectedItem.type === 'autres' ? (
+                                // NOUVEAU : Grille de 10 slots pour "Autres"
+                                <div className="grid grid-cols-5 gap-2">
+                                    {[...Array(10)].map((_, i) => (
+                                        <button 
+                                            key={i} 
+                                            onClick={() => handleItemAction('equip', `autre${i+1}`)} 
+                                            disabled={useLoading} 
+                                            className="py-2 bg-yellow-900/30 border border-yellow-500/50 hover:bg-yellow-600/50 text-yellow-100 font-bold rounded text-[10px] uppercase"
+                                        >
+                                            #{i+1}
+                                        </button>
+                                    ))}
                                 </div>
                             ) : (
                                 <button onClick={() => handleItemAction('equip')} disabled={useLoading} className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg">ÉQUIPER</button>

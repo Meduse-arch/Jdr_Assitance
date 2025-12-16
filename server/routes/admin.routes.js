@@ -1,7 +1,6 @@
-// Fichier : server/routes/admin.routes.js
 import express from 'express';
 import { readDB, writeDB } from '../db.js';
-import { checkAdmin } from '../actions.js';
+import { checkAdmin, calculateStats } from '../actions.js'; 
 import { getLogs } from '../utils/logger.js';
 
 const router = express.Router();
@@ -38,6 +37,53 @@ router.post("/admin/session/players", async (req, res) => {
   res.json({ players: playersList, pnjs: pnjList });
 });
 
+// --- ROUTE CRÉATION PNJ CORRIGÉE ---
+router.post("/admin/pnj/create", async (req, res) => {
+  const { access_token, guild_id, session_id, id, name, stats } = req.body;
+  
+  if (!await checkAdmin(access_token, guild_id)) return res.status(403).json({ error: "Non autorisé" });
+  
+  const db = await readDB();
+  const session = db.sessions[session_id];
+  if (!session) return res.status(404).json({ error: "Session introuvable" });
+
+  if (!session.pnj) session.pnj = {};
+
+  // Utilise l'ID fourni ou en génère un
+  const finalId = id || "pnj_" + Date.now();
+  
+  // Calcul des stats dérivées (HP, Mana, Stam)
+  const baseStats = {
+      force: parseInt(stats.force) || 0,
+      constitution: parseInt(stats.constitution) || 0,
+      agilite: parseInt(stats.agilite) || 0,
+      intelligence: parseInt(stats.intelligence) || 0,
+      perception: parseInt(stats.perception) || 0
+  };
+
+  // On calcule les max (HP, Mana, Stam)
+  const derived = calculateStats(baseStats, {});
+
+  session.pnj[finalId] = {
+      nom: name || "PNJ Sans Nom",
+      joueur: { 
+          ...baseStats,
+          ...derived,
+          hp: derived.hpMax,
+          mana: derived.manaMax,
+          stam: derived.stamMax
+      },
+      // Argent et Inventaire vides par défaut
+      money: { bank: {pc:0,pa:0,po:0,pp:0}, wallet: {pc:0,pa:0,po:0,pp:0} },
+      inventory: [],
+      equipment: {}
+  };
+
+  await writeDB(db);
+  console.log(`[ADMIN] PNJ créé : ${name} (ID: ${finalId}) dans ${session_id}`);
+  res.json({ success: true, id: finalId });
+});
+
 // Créer une session
 router.post("/sessions/create", async (req, res) => { 
   const { access_token, guild_id, session_id, force } = req.body; 
@@ -47,7 +93,7 @@ router.post("/sessions/create", async (req, res) => {
   const db = await readDB(); 
   if (db.sessions[session_id] && !force) return res.status(409).json({ error: "Existe déjà" }); 
   
-  db.sessions[session_id] = { players: {} }; 
+  db.sessions[session_id] = { players: {}, pnj: {} }; 
   await writeDB(db); 
   
   console.log(`[ADMIN] Session créée : ${session_id}`);
@@ -71,7 +117,7 @@ router.post("/sessions/delete", async (req, res) => {
   res.json({ success: true, list: Object.keys(db.sessions) }); 
 });
 
-// Route pour SUPPRIMER un personnage (celle que tu voulais ajouter)
+// Supprimer un personnage (Joueur ou PNJ)
 router.post("/players/delete", async (req, res) => {
   const { access_token, guild_id, session_id, target_id, type } = req.body;
   if (!await checkAdmin(access_token, guild_id)) return res.status(403).json({ error: "Non autorisé" });
@@ -85,7 +131,7 @@ router.post("/players/delete", async (req, res) => {
   if (type === 'player') {
     if (session.players && session.players[target_id]) {
       delete session.players[target_id];
-      // Si le joueur est actuellement connecté sur cette session, on le détache
+      // Si le joueur est connecté, on le détache
       if (db.userSessions && db.userSessions[target_id] === session_id) {
         delete db.userSessions[target_id];
       }

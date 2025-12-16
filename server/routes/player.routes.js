@@ -21,12 +21,15 @@ const updatePlayerMaxStats = (player) => {
 
 // --- ROUTES ---
 
+// Route principale pour récupérer la fiche
 router.post("/player", async (req, res) => { 
   const { user_id, session_id } = req.body; 
   const db = await readDB(); 
   const session = db.sessions[session_id]; 
   if (!session) return res.status(404).json({ error: "Session introuvable" }); 
-  const player = session.players?.[user_id]; 
+  
+  // MODIFICATION CRITIQUE ICI : On cherche dans players OU dans pnj
+  let player = session.players?.[user_id] || session.pnj?.[user_id];
   
   if (player) {
     if (!player.inventory) player.inventory = [];
@@ -66,10 +69,15 @@ router.post("/player/init", async (req, res) => {
   res.json({ success: true, player: newPlayerData }); 
 });
 
+// Helper pour récupérer joueur ou PNJ dans les autres routes
+const getActor = (db, session_id, user_id) => {
+    return db.sessions[session_id]?.players?.[user_id] || db.sessions[session_id]?.pnj?.[user_id];
+};
+
 router.post("/player/inventory/add", async (req, res) => {
   const { user_id, session_id, item } = req.body; 
   const db = await readDB();
-  const player = db.sessions[session_id]?.players?.[user_id];
+  const player = getActor(db, session_id, user_id);
   if (!player) return res.status(404).json({ error: "Joueur introuvable" });
 
   if (!player.inventory) player.inventory = [];
@@ -93,8 +101,8 @@ router.post("/player/inventory/add", async (req, res) => {
 router.post("/player/inventory/adjust", async (req, res) => {
   const { user_id, session_id, item_id, amount } = req.body;
   const db = await readDB();
-  const player = db.sessions[session_id]?.players?.[user_id];
-  const item = player.inventory.find(i => i.id === item_id);
+  const player = getActor(db, session_id, user_id);
+  const item = player?.inventory.find(i => i.id === item_id);
   if (!item) return res.status(404).json({ error: "Objet introuvable" });
 
   item.count += parseInt(amount);
@@ -118,10 +126,10 @@ router.post("/player/inventory/adjust", async (req, res) => {
 router.post("/player/inventory/remove", async (req, res) => {
   const { user_id, session_id, item_id } = req.body;
   const db = await readDB();
-  const player = db.sessions[session_id]?.players?.[user_id];
+  const player = getActor(db, session_id, user_id);
   
-  const index = player.inventory.findIndex(i => i.id === item_id);
-  if (index !== -1) {
+  const index = player?.inventory.findIndex(i => i.id === item_id);
+  if (index !== undefined && index !== -1) {
     const item = player.inventory[index];
     if (item.isEquipped) {
         for (const slot in player.equipment) {
@@ -132,15 +140,15 @@ router.post("/player/inventory/remove", async (req, res) => {
     player.inventory.splice(index, 1);
     await writeDB(db);
   }
-  res.json({ success: true, inventory: player.inventory });
+  res.json({ success: true, inventory: player?.inventory || [] });
 });
 
 router.post("/player/inventory/use", async (req, res) => {
   const { user_id, session_id, item_id } = req.body;
   const db = await readDB();
-  const player = db.sessions[session_id]?.players?.[user_id];
-  const itemIndex = player.inventory.findIndex(i => i.id === item_id);
-  if (itemIndex === -1) return res.status(404).json({ error: "Objet introuvable" });
+  const player = getActor(db, session_id, user_id);
+  const itemIndex = player?.inventory.findIndex(i => i.id === item_id);
+  if (!player || itemIndex === -1) return res.status(404).json({ error: "Objet introuvable" });
 
   const item = player.inventory[itemIndex];
   const j = player.joueur;
@@ -172,7 +180,7 @@ router.post("/player/inventory/use", async (req, res) => {
 router.post("/player/inventory/equip", async (req, res) => {
   const { user_id, session_id, item_id, target_slot } = req.body;
   const db = await readDB();
-  const player = db.sessions[session_id]?.players?.[user_id];
+  const player = getActor(db, session_id, user_id);
   if (!player) return res.status(404).json({ error: "Joueur introuvable" });
 
   if (!player.equipment) player.equipment = { 
@@ -227,28 +235,30 @@ router.post("/player/inventory/equip", async (req, res) => {
 router.post("/player/inventory/unequip", async (req, res) => {
     const { user_id, session_id, item_id } = req.body;
     const db = await readDB();
-    const player = db.sessions[session_id]?.players?.[user_id];
+    const player = getActor(db, session_id, user_id);
     
-    const item = player.inventory.find(i => i.id === item_id);
+    const item = player?.inventory.find(i => i.id === item_id);
     if (item) {
         item.isEquipped = false;
     }
 
-    for (const slot in player.equipment) {
-        if (player.equipment[slot]?.id === item_id) {
-            player.equipment[slot] = null;
+    if (player) {
+        for (const slot in player.equipment) {
+            if (player.equipment[slot]?.id === item_id) {
+                player.equipment[slot] = null;
+            }
         }
+        updatePlayerMaxStats(player);
+        await writeDB(db);
     }
     
-    updatePlayerMaxStats(player);
-    await writeDB(db);
-    res.json({ success: true, inventory: player.inventory, equipment: player.equipment });
+    res.json({ success: true, inventory: player?.inventory, equipment: player?.equipment });
 });
 
 router.post("/player/roll", async (req, res) => {
   const { user_id, session_id, type, data, username, activeWeapons } = req.body;
   const db = await readDB();
-  const player = db.sessions[session_id]?.players?.[user_id];
+  const player = getActor(db, session_id, user_id);
   if (!player) return res.status(404).json({ error: "Joueur introuvable" });
   
   const result = processRoll(player, type, data, activeWeapons || []);
@@ -259,12 +269,67 @@ router.post("/player/roll", async (req, res) => {
   res.json(result);
 });
 
-// Routes standard (repos, resource, stat, money, transfer, exchange)
-router.post("/player/repos", async (req, res) => { const { user_id, session_id, type, target, username } = req.body; const db = await readDB(); const player = db.sessions[session_id]?.players?.[user_id]; if (!player) return res.status(404).json({ error: "Joueur introuvable" }); const result = processRepos(player, type, target); if (!result.success) return res.status(400).json({ error: result.error }); await writeDB(db); console.log(`[REPOS] ${username || user_id} (${type})`); res.json({ success: true }); });
-router.post("/player/resource", async (req, res) => { const { user_id, session_id, target, action, value, username } = req.body; const db = await readDB(); const player = db.sessions[session_id]?.players?.[user_id]; if (!player) return res.status(404).json({ error: "Joueur introuvable" }); const result = processResourceMod(player, target, action, value); if (!result.success) return res.status(400).json({ error: result.error }); await writeDB(db); console.log(`[RESOURCE] ${username || user_id} : ${action} ${value} ${target}`); res.json({ success: true }); });
-router.post("/player/stat", async (req, res) => { const { user_id, session_id, stat, action, value, username } = req.body; const db = await readDB(); const player = db.sessions[session_id]?.players?.[user_id]; if (!player) return res.status(404).json({ error: "Joueur introuvable" }); const result = processStatMod(player, stat, action, value); if (!result.success) return res.status(400).json({ error: result.error }); await writeDB(db); console.log(`[STAT] ${username || user_id} : ${action} ${value} ${stat}`); res.json({ success: true }); });
-router.post("/player/money", async (req, res) => { const { user_id, session_id, target, action, coin, value, username } = req.body; const db = await readDB(); const player = db.sessions[session_id]?.players?.[user_id]; if (!player) return res.status(404).json({ error: "Joueur introuvable" }); const result = processMoneyMod(player, target, action, coin, value); if (!result.success) return res.status(400).json({ error: result.error }); await writeDB(db); console.log(`[ARGENT] ${username || user_id} : ${action} ${value} ${coin}`); res.json({ success: true }); });
-router.post("/player/transfer", async (req, res) => { const { user_id, session_id, from, to, coin, amount, username } = req.body; const db = await readDB(); const player = db.sessions[session_id]?.players?.[user_id]; if (!player) return res.status(404).json({ error: "Joueur introuvable" }); const result = processTransfer(player, from, to, coin, amount); if (!result.success) return res.status(400).json({ error: result.error }); await writeDB(db); console.log(`[TRANSFERT] ${username || user_id} : ${amount} ${coin}`); res.json({ success: true }); });
-router.post("/player/exchange", async (req, res) => { const { user_id, session_id, container, from, to, amount, username } = req.body; const db = await readDB(); const player = db.sessions[session_id]?.players?.[user_id]; if (!player) return res.status(404).json({ error: "Joueur introuvable" }); const result = processExchange(player, container, from, to, amount); if (!result.success) return res.status(400).json({ error: result.error }); await writeDB(db); console.log(`[ECHANGE] ${username || user_id}`); res.json({ success: true }); });
+// Helper pour les routes d'action
+const withPlayer = async (req, res, callback) => {
+    const { user_id, session_id } = req.body;
+    const db = await readDB();
+    const player = getActor(db, session_id, user_id);
+    if (!player) return res.status(404).json({ error: "Joueur introuvable" });
+    await callback(player, db);
+};
+
+router.post("/player/repos", (req, res) => withPlayer(req, res, async (player, db) => {
+    const { type, target, username } = req.body;
+    const result = processRepos(player, type, target);
+    if (!result.success) return res.status(400).json({ error: result.error });
+    await writeDB(db);
+    console.log(`[REPOS] ${username || "Inconnu"} (${type})`);
+    res.json({ success: true });
+}));
+
+router.post("/player/resource", (req, res) => withPlayer(req, res, async (player, db) => {
+    const { target, action, value, username } = req.body;
+    const result = processResourceMod(player, target, action, value);
+    if (!result.success) return res.status(400).json({ error: result.error });
+    await writeDB(db);
+    console.log(`[RESOURCE] ${username || "Inconnu"} : ${action} ${value} ${target}`);
+    res.json({ success: true });
+}));
+
+router.post("/player/stat", (req, res) => withPlayer(req, res, async (player, db) => {
+    const { stat, action, value, username } = req.body;
+    const result = processStatMod(player, stat, action, value);
+    if (!result.success) return res.status(400).json({ error: result.error });
+    await writeDB(db);
+    console.log(`[STAT] ${username || "Inconnu"} : ${action} ${value} ${stat}`);
+    res.json({ success: true });
+}));
+
+router.post("/player/money", (req, res) => withPlayer(req, res, async (player, db) => {
+    const { target, action, coin, value, username } = req.body;
+    const result = processMoneyMod(player, target, action, coin, value);
+    if (!result.success) return res.status(400).json({ error: result.error });
+    await writeDB(db);
+    console.log(`[ARGENT] ${username || "Inconnu"} : ${action} ${value} ${coin}`);
+    res.json({ success: true });
+}));
+
+router.post("/player/transfer", (req, res) => withPlayer(req, res, async (player, db) => {
+    const { from, to, coin, amount, username } = req.body;
+    const result = processTransfer(player, from, to, coin, amount);
+    if (!result.success) return res.status(400).json({ error: result.error });
+    await writeDB(db);
+    console.log(`[TRANSFERT] ${username || "Inconnu"} : ${amount} ${coin}`);
+    res.json({ success: true });
+}));
+
+router.post("/player/exchange", (req, res) => withPlayer(req, res, async (player, db) => {
+    const { container, from, to, amount, username } = req.body;
+    const result = processExchange(player, container, from, to, amount);
+    if (!result.success) return res.status(400).json({ error: result.error });
+    await writeDB(db);
+    console.log(`[ECHANGE] ${username || "Inconnu"}`);
+    res.json({ success: true });
+}));
 
 export default router;
